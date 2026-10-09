@@ -26,6 +26,7 @@ set(DUALCEDITOR_DUALC_COMMIT 2fcb6ee12d3b375fc234e81e319d6d17cbb1f8cd)
 if(DUALCEDITOR_DUALC_DIR)
   message(STATUS "DualC: local tree ${DUALCEDITOR_DUALC_DIR}")
   add_subdirectory(${DUALCEDITOR_DUALC_DIR} ${CMAKE_BINARY_DIR}/_dualc EXCLUDE_FROM_ALL)
+  set(DUALCEDITOR_DUALC_SOURCE_DIR ${DUALCEDITOR_DUALC_DIR})
 else()
   message(STATUS "DualC: fetching pinned commit ${DUALCEDITOR_DUALC_COMMIT}")
   include(FetchContent)
@@ -34,6 +35,7 @@ else()
     GIT_TAG        ${DUALCEDITOR_DUALC_COMMIT}
     EXCLUDE_FROM_ALL)
   FetchContent_MakeAvailable(dualc)
+  set(DUALCEDITOR_DUALC_SOURCE_DIR ${dualc_SOURCE_DIR})
 endif()
 
 # --- Own targets -----------------------------------------------------------
@@ -53,12 +55,27 @@ endfunction()
 
 add_executable(DualCEditor
   src/main.cpp
+  src/graph_scene.cpp
+  src/graph_scene.h
+  src/orbit_camera.cpp
+  src/orbit_camera.h
+  src/snapshot.cpp
+  src/snapshot.h
+  src/trace_renderer.cpp
+  src/trace_renderer.h
   src/viewport.cpp
   src/viewport.h)
 target_link_libraries(DualCEditor PRIVATE
   Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
   dualc_examples_fieldglsl)
+target_compile_definitions(DualCEditor PRIVATE
+  DUALCEDITOR_VERSION="${PROJECT_VERSION}")
 dualceditor_target_options(DualCEditor)
+# The graph the viewport opens on, read from the pinned DualC tree.
+qt_add_resources(DualCEditor dualc_samples
+  PREFIX /samples
+  BASE ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples
+  FILES ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
 set_target_properties(DualCEditor PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 

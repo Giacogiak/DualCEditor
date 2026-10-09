@@ -2,8 +2,9 @@
 
 ## Current focus
 
-P00: the viewport, Spike A (`../../plan/10_P00_viewport.md`). The skeleton builds against
-the pinned DualC and its codegen smoke test passes; nothing is rendered yet.
+P00: the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
+sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches
+`dualc_field_view`. T2 (orbit camera, adaptive preview) is next.
 
 ## Next up
 

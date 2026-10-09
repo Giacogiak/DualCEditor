@@ -1,0 +1,192 @@
+#include "trace_renderer.h"
+
+#include <QOpenGLContext>
+
+#include <algorithm>
+#include <cmath>
+
+namespace fg = dce::fieldgraph;
+using dualc::Vector3;
+
+namespace {
+
+GLuint compileStage(QOpenGLFunctions_3_3_Core& gl, GLenum kind,
+                    const std::string& src, const char* label, std::string* error) {
+  const GLuint s = gl.glCreateShader(kind);
+  const char* csrc = src.c_str();
+  gl.glShaderSource(s, 1, &csrc, nullptr);
+  gl.glCompileShader(s);
+  GLint ok = 0;
+  gl.glGetShaderiv(s, GL_COMPILE_STATUS, &ok);
+  if (!ok) {
+    char log[8192] = {};
+    gl.glGetShaderInfoLog(s, sizeof(log), nullptr, log);
+    *error = std::string(label) + " shader compile error:\n" + log;
+    gl.glDeleteShader(s);
+    return 0;
+  }
+  return s;
+}
+
+}  // namespace
+
+bool TraceRenderer::initialize() {
+  const QOpenGLContext* ctx = QOpenGLContext::currentContext();
+  if (!ctx || ctx->isOpenGLES() || ctx->format().version() < qMakePair(3, 3))
+    return false;
+  if (!initializeOpenGLFunctions()) return false;
+  if (!vao_) glGenVertexArrays(1, &vao_);
+  return true;
+}
+
+bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
+  const GLuint vs = compileStage(*this, GL_VERTEX_SHADER,
+                                 fg::vertexShaderSource(false), "vertex", error);
+  if (!vs) return false;
+  const GLuint fs = compileStage(*this, GL_FRAGMENT_SHADER,
+                                 fg::assembleTraceShader(scene, false), "fragment",
+                                 error);
+  if (!fs) {
+    glDeleteShader(vs);
+    return false;
+  }
+  const GLuint p = glCreateProgram();
+  glAttachShader(p, vs);
+  glAttachShader(p, fs);
+  glLinkProgram(p);
+  glDeleteShader(vs);
+  glDeleteShader(fs);
+  GLint ok = 0;
+  glGetProgramiv(p, GL_LINK_STATUS, &ok);
+  if (!ok) {
+    char log[8192] = {};
+    glGetProgramInfoLog(p, sizeof(log), nullptr, log);
+    *error = std::string("program link error:\n") + log;
+    glDeleteProgram(p);
+    return false;
+  }
+
+  if (program_) glDeleteProgram(program_);
+  program_ = p;
+  bounds_ = scene.bounds;
+  stepScale_ = scene.stepScale;
+  featureScale_ = scene.featureScale;
+
+  // The previous scene's grids go first: a reload re-bakes every mesh.
+  glUseProgram(program_);
+  releaseTextures();
+  for (std::size_t i = 0; i < scene.meshes.size(); ++i)
+    textures_.push_back(uploadGrid3D(scene.meshes[i], static_cast<int>(i)));
+  for (const fg::UniformBinding& b : scene.bindings) setBinding(b);
+  return true;
+}
+
+void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {
+  glViewport(0, 0, width, height);
+  glClearColor(0.10f, 0.11f, 0.13f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+  if (!program_) return;
+
+  // Uniforms as dualc_field_view's drawFrame sets them, section planes off.
+  glUseProgram(program_);
+  const CameraFrame c = cameraFrame(cam);
+  setUniform3("uCamPos", c.pos);
+  setUniform3("uCamForward", c.forward);
+  setUniform3("uCamRight", c.right);
+  setUniform3("uCamUp", c.up);
+  setUniform1f("uTanHalfFov", 0.41421356f);  // tan(22.5 deg)
+  setUniform1f("uAspect", float(width) / float(std::max(height, 1)));
+  setUniform3("uBoundsMin", bounds_.min);
+  setUniform3("uBoundsMax", bounds_.max);
+  setUniform3("uLightDir", Vector3{0.5, 0.85, 0.6}.normalize());
+
+  // March constants scale to the finest feature (a TPMS wavelength), else to
+  // the bounds diagonal. A stepScale of 1 means a true SDF: plain sphere steps.
+  const Vector3 e = bounds_.extent();
+  const double diag = std::sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+  const double feat =
+      featureScale_ > 0.0f ? std::min(double(featureScale_), diag) : diag;
+  const float stepMin = float(std::min(diag * 0.002, feat * 0.003));
+  setUniform1f("uStepScale", stepScale_);
+  setUniform1f("uMetricSDF", stepScale_ >= 0.999f ? 1.0f : 0.0f);
+  setUniform1f("uStepMin", stepMin);
+  setUniform1f("uStepMax", float(std::min(diag * 0.100, feat * 0.350)));
+  setUniform1f("uHmem", stepMin);  // FD normals use the smallest step
+
+  const float noClip[12] = {};
+  glUniform4fv(glGetUniformLocation(program_, "uClip"), 3, noClip);
+  setUniform1i("uClipMask", 0);
+
+  glBindVertexArray(vao_);
+  glDrawArrays(GL_TRIANGLES, 0, 3);
+  glBindVertexArray(0);
+}
+
+void TraceRenderer::release() {
+  releaseTextures();
+  if (program_) glDeleteProgram(program_);
+  if (vao_) glDeleteVertexArrays(1, &vao_);
+  program_ = 0;
+  vao_ = 0;
+}
+
+void TraceRenderer::releaseTextures() {
+  if (textures_.empty()) return;
+  glDeleteTextures(static_cast<GLsizei>(textures_.size()), textures_.data());
+  textures_.clear();
+}
+
+void TraceRenderer::setUniform1f(const char* name, float v) {
+  glUniform1f(glGetUniformLocation(program_, name), v);
+}
+void TraceRenderer::setUniform1i(const char* name, int v) {
+  glUniform1i(glGetUniformLocation(program_, name), v);
+}
+void TraceRenderer::setUniform3(const char* name, const Vector3& v) {
+  glUniform3f(glGetUniformLocation(program_, name), float(v.x), float(v.y),
+              float(v.z));
+}
+void TraceRenderer::setUniform3f(const char* name, float x, float y, float z) {
+  glUniform3f(glGetUniformLocation(program_, name), x, y, z);
+}
+
+// A parameter edit: no recompile. mat4 goes up row-major (transposed) to match
+// Mat4::transformPoint, as in dualc_field_view.
+void TraceRenderer::setBinding(const fg::UniformBinding& b) {
+  const GLint loc = glGetUniformLocation(program_, b.name.c_str());
+  if (loc < 0) return;
+  if (b.glslType == "float") glUniform1f(loc, b.value[0]);
+  else if (b.glslType == "vec3") glUniform3f(loc, b.value[0], b.value[1], b.value[2]);
+  else if (b.glslType == "mat4") glUniformMatrix4fv(loc, 1, GL_TRUE, b.value.data());
+}
+
+// raymarch_gl's uploadGrid3D: one baked grid to a GL_R32F 3D texture on `unit`,
+// plus the <base>_texMin/_texScale/_texDim uniforms the codegen names off the
+// sampler ("u_n5_tex" -> "u_n5").
+GLuint TraceRenderer::uploadGrid3D(const fg::MeshTexture& mesh, int unit) {
+  const dualc::Vector3i& res = mesh.resolution;
+  GLuint tex = 0;
+  glGenTextures(1, &tex);
+  glActiveTexture(GL_TEXTURE0 + unit);
+  glBindTexture(GL_TEXTURE_3D, tex);
+  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_3D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  glTexImage3D(GL_TEXTURE_3D, 0, GL_R32F, res.x, res.y, res.z, 0, GL_RED, GL_FLOAT,
+               mesh.values.data());
+
+  const std::string base = mesh.samplerName.substr(0, mesh.samplerName.size() - 4);
+  const Vector3 ext = mesh.region.extent();
+  setUniform1i(mesh.samplerName.c_str(), unit);
+  setUniform3((base + "_texMin").c_str(), mesh.region.min);
+  setUniform3f((base + "_texScale").c_str(),
+               float((res.x - 1) / std::max(ext.x, 1e-12)),
+               float((res.y - 1) / std::max(ext.y, 1e-12)),
+               float((res.z - 1) / std::max(ext.z, 1e-12)));
+  setUniform3f((base + "_texDim").c_str(), float(res.x), float(res.y),
+               float(res.z));
+  return tex;
+}

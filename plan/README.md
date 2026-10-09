@@ -26,3 +26,7 @@ development box cannot measure performance.
 | `50_P04_import.md` | Drag-and-drop mesh import, watertight solids | stop on E-09 |
 | `60_P05_operations.md` | Booleans, lattice fills, operation panels | stop on E-10 |
 | `70_P06_export.md` | Mesh extraction and export with progress | auto |
+
+## Other files
+
+- `run.manifest.json` — the `/plan-run` driver's run order and gates, one unit per task. Giacomo's to change, not a unit's.

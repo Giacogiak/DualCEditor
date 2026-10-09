@@ -9,4 +9,4 @@ by meaning (`QKeyEvent::text()`, arrows, function keys), never by physical posit
 
 ## Files
 
-None yet. `plan/10_P00_viewport.md` T2 adds `01-viewport.md`.
+- `01-viewport.md` — launch flags (`--snapshot`), exit codes, and the viewport's keys and mouse (P00 T2 adds the bindings).
