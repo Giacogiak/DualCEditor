@@ -1,0 +1,4 @@
+#!/bin/sh
+# Fast tier of the gate (docs + hygiene). Enable once per clone:
+#   git config core.hooksPath scripts/hooks
+exec python3 scripts/check.py --fast

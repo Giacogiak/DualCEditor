@@ -1,62 +1,30 @@
 # DualCEditor
 
-A standalone, fully raytraced 3D editor for DualC field graphs. Import meshes, build scenes with geometric operations (booleans, lattices, transforms), and export high-quality meshes using sphere-traced SDF rendering.
+A standalone 3D editor for [DualC](https://github.com/Giacogiak/DualC) field graphs. It is
+in early development: the skeleton builds against DualC, and the viewport is being built
+(see `docs/roadmap/README.md`).
 
-## Features (planned)
+What it will do:
+- render solids, TPMS and strut lattices live by sphere tracing, without meshing them;
+- import meshes by drag and drop, including mesh soups made watertight;
+- combine objects with hard and smooth booleans, and fill volumes with TPMS or strut
+  lattices;
+- show, hide and select objects from a scene panel;
+- save scenes as `.dcscene`, and export meshes to STL, 3MF or OBJ through DualC.
 
-- **Multi-object viewport:** Drag-and-drop mesh import, scene graph with show/hide
-- **Operations:** Hard/smooth booleans, auto-watertight import, TPMS fill, strut-lattice fill
-- **Real-time preview:** Sphere-traced rendering at adaptive resolution (full-res on idle)
-- **Scene format:** `.dcscene` container (graph JSON + embedded meshes + optional baked grids)
-- **Export:** STL, 3MF, OBJ with tiling support for large lattices
+## Build
 
-## Building
-
-**Requirements:**
-- CMake 3.20+
-- C++17 compiler
-- Qt 5.15+ or Qt 6
-- OpenGL 3.3 core capable GPU
+You need CMake 3.28 or newer, a C++17 compiler, Qt 6.4 or newer, and a GPU with OpenGL 3.3
+core.
 
 ```bash
-# Clone and configure
-git clone https://github.com/Giacogiak/DualCEditor.git
-cd DualCEditor
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-
-# Build and run
-cmake --build build --config Release -j
+cmake --build build -j
 ./build/bin/DualCEditor
 ```
 
-To use a local DualC checkout instead of fetching:
-```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-      -DDUALCEDITOR_DUALC_DIR=/path/to/DualC
-```
-
-## Development
-
-Gate check (docs + hygiene):
-```bash
-python scripts/check.py
-```
-
-See [CLAUDE.md](./CLAUDE.md) for design principles and workflow.
-
-## Roadmap
-
-- **Phase 0:** Spikes (QOpenGLWidget host, id-returning codegen)
-- **Phase 1–2:** Core architecture (scene model, async compile)
-- **Phase 3–5:** Full editor shell and operations
-
-See [docs/roadmap/](./docs/roadmap/) for current status.
+To build against a local DualC checkout, add `-DDUALCEDITOR_DUALC_DIR=/path/to/DualC`.
 
 ## License
 
-MIT (this editor). Links to DualC (MIT) and depends on Qt (LGPL, dynamic link only).
-
-## Related
-
-- **DualC:** Geometry library this editor is built on ([github.com/Giacogiak/DualC](https://github.com/Giacogiak/DualC))
-- **Boletus:** .NET Rhino/Grasshopper client for DualC ([github.com/Giacogiak/Boletus](https://github.com/Giacogiak/Boletus))
+MIT. Qt is used under the LGPL and linked dynamically.

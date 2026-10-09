@@ -1,75 +1,65 @@
 # DualCEditor — agent entry
 
-DualCEditor is a standalone Qt-based, fully raytraced 3D editor for DualC field graphs: import meshes,
-build scenes with geometric operations (booleans, lattices, transforms), and extract high-quality meshes.
-Sphere-traced SDF rendering with OpenGL 3.3 core, Qt 5/6 UI, multi-object viewport.
-
-Built on [[DualC]] (engine library, pinned via FetchContent) and Qt (find_package).
+DualCEditor is a standalone Qt 6 editor for DualC field graphs. It sphere-traces the field
+live, lets you build a scene of objects through operations (booleans, TPMS and strut-lattice
+fills, transforms), and exports meshes through DualC. C++17, MIT. Design background:
+`docs/roadmap/01-feasibility.md`.
 
 ## Build, test, gate
 
-A bare clone configures with no flags; Qt 5 or Qt 6 is required (`find_package(Qt5 ...)`).
-DualC is fetched at its pinned commit in the build tree, unless `-DDUALCEDITOR_DUALC_DIR=/path` 
-names a local tree. GLFW and glad are fetched/vendored as DualC does.
+Qt 6.4 or newer must be installed (`find_package`, never fetched). On Ubuntu:
+`sudo apt install qt6-base-dev ninja-build`. DualC is fetched at the commit pinned in
+`CMakeLists.txt`, unless `-DDUALCEDITOR_DUALC_DIR=/path` names a local tree. DualC in turn
+fetches geometry-central.
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-      -DDUALCEDITOR_BUILD_TESTS=ON
-cmake --build build --config Release -j
-ctest --test-dir build -C Release --output-on-failure
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+ctest --test-dir build --output-on-failure
+./build/bin/DualCEditor
 ```
 
-Opt-in, all `OFF` by default: `-DDUALCEDITOR_WERROR=ON` (own-target warnings are errors).
-The main app lands in `build/bin/DualCEditor` (or `Release/` with VS).
+`-DDUALCEDITOR_WERROR=ON` makes warnings on our own targets errors.
 
-The gate is `scripts/check.py` — docs and hygiene only at first, no CTest. Run before every commit:
+**The gate is what CI runs.** `.github/workflows/gate.yml` runs `scripts/check.py`. Run it
+before every commit:
 
 ```bash
-python scripts/check.py          # docs contract + repo hygiene
-python scripts/check.py --fast   # docs + hygiene only, about a second
-git config core.hooksPath scripts/hooks   # once per clone
+python scripts/check.py          # docs index + hygiene + configure/build/ctest
+python scripts/check.py --fast   # docs index + hygiene only
+git config core.hooksPath scripts/hooks   # once per clone: fast tier on commit
 ```
 
-## Five principles (inherited from DualC)
+## Rules
 
-1. **Nothing stays in the chat.** Every fact, fix, decision goes into the repo before the session
-   closes. Route by owner: `docs/README.md`.
+1. **Nothing stays in the chat.** Every fix, measurement, decision or rejected approach is
+   written to its owner (the table in `docs/README.md`) before the session ends.
+2. **Every folder under `docs/` and `plan/` has a README naming every file in it.** The
+   gate enforces this.
+3. **Ids are permanent.** Decisions are `E-NN`, phases `Pnn`, tasks `Tn`. Nothing is
+   renumbered or reused. A DualC decision is cited as `DualC D-NN`.
+4. **The command reference grows with the UI.** A flag, key or panel that changes updates
+   `docs/command_reference/` in the same session.
+5. **DualC is not edited from here.** The editor links DualC's host-side libraries at a
+   pinned commit (E-06). A needed DualC change is a question for the owner and a PR on
+   DualC.
+6. **`main` is reached by pull request.**
 
-2. **Every level has a README.** Each folder's `README.md` indexes files below it.
+## Constraints
 
-3. **Numbers are IDs.** Roadmap blocks, tracked items, reference pages keep their birth number.
-   No renumbering; no reuse.
-
-4. **Docs grow with the code.** A CLI surface or UI feature created/changed/removed gets its
-   `docs/command_reference/` page updated in the same session.
-
-5. **No page outgrows the cap.** Oversized pages split into same-numbered folders, never frozen.
+- **Scope (E-05, DualC D-04).** Mesh I/O, scene, transforms and UI belong to the editor.
+- **Licences (E-01).** Vendored code must be MIT, BSD or public domain. Qt (LGPL) is linked
+  dynamically, never vendored.
+- **Reference GPU (E-04).** GeForce GTX 1050 Ti 4 GB, on the owner's laptop. This
+  development box (Quadro FX 3700) cannot measure performance, so measurements are human
+  checks.
+- **Keyboard.** The owner uses Belgian AZERTY. Bind keys by meaning, not by physical
+  position.
 
 ## Reading order
 
-1. `docs/README.md` — ownership of fact categories.
-2. `docs/design/README.md` — how the editor fits: scene model, rendering pipeline.
-3. `docs/decisions/README.md` — deferred, dropped, and settled choices.
-4. `docs/roadmap/README.md` — current status and next-up items.
-5. The roadmap block of the topic you touch.
-
-## Key constraints
-
-- **Library scope (D-04, inherited):** Scene management, UI, mesh import, and 3D transform
-  stay in the editor. DualC is engine + ABI only. Meshes arrive in one global frame.
-  
-- **Dependency policy (D-01, inherited):** Permissive licenses only (MIT, BSD, PD).
-  Qt is LGPL; dynamic linking of this app does not inherit the constraint to the library.
-  If in doubt, ask.
-  
-- **Main branch is protected (inherited from DualC 2026-10-07):** Branch → PR → merge only.
-  No direct pushes to main.
-
-- **Target GPU:** GeForce RTX 1050 Ti 4GB. Baseline: interactive at preview scale, settle
-  to full when idle.
-
-## Links
-
-- **Parent:** [[https://github.com/Giacogiak/DualC]] (engine library, pinned at a commit in CMakeLists.txt).
-- **Sister client:** [[project_boletus_client_inmem_meshes]] — .NET Rhino/GH plugin (pinned dependency pattern).
-- **Design plan:** `/home/giak/.claude/plans/this-is-a-divergence-adaptive-orbit.md`.
+1. `docs/README.md` — what lives where.
+2. `docs/roadmap/README.md` — current focus.
+3. `docs/decisions/README.md` — settled, open (with the phases they block) and deferred.
+4. `plan/README.md` and the phase file of the task at hand.
+5. `docs/design/` and `docs/command_reference/` pages the task touches.

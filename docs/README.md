@@ -1,24 +1,20 @@
-# DualCEditor Documentation
+# DualCEditor documentation
 
-## Ownership by topic
+Every folder has a `README.md` naming every file in it; `scripts/check.py` enforces it.
 
-| Folder | Owner | Content |
-|--------|-------|---------|
-| `design/` | Architecture | How the editor is structured: scene model, rendering pipeline, threading, undo/redo |
-| `decisions/` | Design choices | Deferred, dropped, and settled decisions with rationale |
-| `roadmap/` | Status tracking | Current phase, blockers, next-up work, measurements |
-| `command_reference/` | UI contract | CLI (if any), UI panels, keyboard shortcuts, serialization |
+## Who owns which fact
 
-## Quick links
+| Folder | Owns |
+|---|---|
+| `design/` | How the editor is built today: scene model, render path, threading, file formats. Written as the code lands. |
+| `decisions/` | Settled choices (not re-litigated), open decisions with the phases they block, deferred work with its trigger. |
+| `roadmap/` | Status snapshot, the feasibility analysis, measurements. |
+| `command_reference/` | The usage contract: launch flags, keys and mouse, panels. Updated in the same session as the UI. |
+| `../plan/` | The phased work plan `/plan-run` executes, one unit per task. |
 
-- **Roadmap 00** (`roadmap/00-phase-0-spikes.md`): Spike A (QOpenGLWidget host) and Spike B (id-returning codegen).
-- **Design** (`design/01-scene-model.md`): Multi-object scene, field graph integration, render path.
-- **Decisions** (`decisions/01-settled.md`): Qt choice, separate repo, current lighting (no shadows).
+## Files
 
-## Reading order
-
-Start here if you are:
-- **Building or extending the editor:** Read design/01, then roadmap/00.
-- **Debugging a render issue:** Read design/02-rendering.md, then look in src/.
-- **Adding a UI feature:** Read command_reference/, then design/03-ui.md.
-- **Understanding deferred work:** Read decisions/02-deferred.md.
+- `design/` — architecture, see its README.
+- `decisions/` — see its README.
+- `roadmap/` — see its README.
+- `command_reference/` — see its README.

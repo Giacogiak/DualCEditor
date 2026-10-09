@@ -2,83 +2,43 @@ name: gate
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
 
 jobs:
   docs:
-    name: docs and hygiene
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Python
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: check.py
-        run: python scripts/check.py --fast
+          python-version: "3.12"
+      - run: python scripts/check.py --fast
 
-  build-qt5:
-    name: build (Ubuntu, Qt5)
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2022, macos-14]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install Qt5
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qt5-qmake qtbase5-dev libqt5opengl5-dev
-      - name: Install deps
-        run: |
-          sudo apt-get install -y ninja-build
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -j
-
-  build-qt6:
-    name: build (Ubuntu, Qt6)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt6
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qt6-base-dev libqt6opengl6-dev libqt6openglwidgets6
-      - name: Install deps
-        run: |
-          sudo apt-get install -y ninja-build
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -j
-
-  build-windows:
-    name: build (Windows, Qt)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v3
+      - uses: actions/setup-python@v5
         with:
-          version: "6.5.3"
-          arch: "win64_msvc2019_64"
-      - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -j
-
-  build-macos:
-    name: build (macOS, Qt)
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Qt and deps
-        run: |
-          brew install qt ninja
-      - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-      - name: Build
-        run: cmake --build build --config Release -j
+          python-version: "3.12"
+      - name: Qt (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y qt6-base-dev ninja-build
+      - name: Qt (Windows, macOS)
+        if: runner.os != 'Linux'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.*"
+          cache: true
+      - name: Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+      - name: MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+      - run: python scripts/check.py

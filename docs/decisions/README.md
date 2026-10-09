@@ -1,14 +1,21 @@
 # Decisions
 
-Decisions are settled once and never re-litigated unless a blocker emerges. Deferred items have a trigger that opens them for reconsideration.
+Editor decisions are `E-NN`; a DualC decision is cited as `DualC D-NN`. Ids are never
+reused or renumbered.
 
 ## Files
 
-- `01-settled.md` — Design choices that are locked (D-01 through D-05).
-- `02-deferred.md` — Work that is parked with a trigger for re-evaluation (D-10+).
+- `01-settled.md` — choices that are not re-litigated (E-01 – E-06).
+- `02-open.md` — decisions a phase waits on, with options and a recommendation. `/plan-run` reads it at each stop.
+- `03-deferred.md` — work parked behind a trigger (E-20 onward).
 
-## Convention
+## Open decisions → blocked phases
 
-A decision is identified by the number and file it lives in: `D-05` = "decision 05 in settled.md".
+This table is authoritative; `/plan-run` reads it before unlocking a phase.
 
-Deferred items are numbered from D-10 onward; the offset leaves room for future settled decisions.
+| Decision | Blocks | Status |
+|---|---|---|
+| E-07 Picking mechanism | P01 | open |
+| E-08 Scene file format | P03 | open |
+| E-09 Mesh import formats and readers | P04 | open |
+| E-10 Smooth booleans on non-metric inputs | P05 | open |
