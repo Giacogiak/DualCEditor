@@ -1,0 +1,34 @@
+# Build
+build/
+build-*
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake
+CMakeUserPresets.json
+
+# Qt
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*.pro.user
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Misc
+.clangd/
+.cache/

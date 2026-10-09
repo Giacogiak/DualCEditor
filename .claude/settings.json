@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "bash": {
+      "allowlist": [
+        "git",
+        "cmake",
+        "ctest",
+        "python scripts/check.py"
+      ]
+    }
+  }
+}
