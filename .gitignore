@@ -32,3 +32,6 @@ __pycache__/
 # Misc
 .clangd/
 .cache/
+
+# plan-run state
+.plan-run/
