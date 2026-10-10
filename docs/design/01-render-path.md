@@ -26,8 +26,8 @@ follow until someone ports the change. The DualC files to diff against at a pin 
 |---|---|
 | `src/graph_scene.{h,cpp}` | `compileGraphText`: graph text → `GlslScene`. It parses JSON or shorthand, takes the field's own bounds (built once through `FieldGraph::build`) padded by 5% as the trace box, then calls `compileToGlsl`. This is dualc_field_view's path without `--bounds`. Throws `GraphError`. |
 | `src/trace_renderer.{h,cpp}` | `TraceRenderer`: links `vertexShaderSource(false)` + `assembleTraceShader(scene, false)` (GLSL 330 core), uploads the mesh grids to `GL_R32F` 3D textures, sets the bindings, and draws a full-screen triangle (`glDrawArrays(GL_TRIANGLES, 0, 3)` on an empty VAO). It holds no window and no context. |
-| `src/orbit_camera.{h,cpp}` | `OrbitCamera`, `frameBounds`, `cameraFrame`: DualC's `OrbitState` maths with the same constants (yaw 0.7, pitch 0.5, distance 1.3 × diagonal). Input comes in P00 T2. |
-| `src/viewport.{h,cpp}` | `Viewport` (`QOpenGLWidget`): owns a `TraceRenderer` and draws into the widget's FBO at `size × devicePixelRatio`. GL objects are released on `aboutToBeDestroyed`. |
+| `src/orbit_camera.{h,cpp}` | `OrbitCamera`, `frameBounds`, `cameraFrame`: DualC's `OrbitState` maths with the same constants (yaw 0.7, pitch 0.5, distance 1.3 × diagonal), plus the input steps `orbitBy`, `dollyBy` (raymarch_gl's `orbitDragTo`, `orbitDolly`) and the editor's own `panBy`. |
+| `src/viewport.{h,cpp}` | `Viewport` (`QOpenGLWidget`): owns a `TraceRenderer` and draws into the widget's FBO at `size × devicePixelRatio`, at preview scale while the view moves (below). Turns mouse and key events into camera steps. GL objects are released on `aboutToBeDestroyed`. |
 | `src/snapshot.{h,cpp}` | `renderSnapshot`: a `QOpenGLContext` + `QOffscreenSurface` + `QOpenGLFramebufferObject`, one `render`, `toImage()`, saved as PNG. No window is created. |
 
 Both the widget and the snapshot draw through the same `TraceRenderer::render`, so the
@@ -57,6 +57,31 @@ per `setScene`: `float` → `glUniform1f`, `vec3` → `glUniform3f`, `mat4` →
 `glUniformMatrix4fv(…, GL_TRUE, …)` (row-major, as in DualC). Each mesh grid takes texture
 unit *i* plus the `<base>_texMin/_texScale/_texDim` uniforms.
 
+## Adaptive preview (P00 T2)
+
+This follows dualc_field_view's render loop, moved onto Qt's event-driven painting.
+
+- **Moving.** The view counts as moving while a drag is held, and for `kSettleMs` = 180 ms
+  after the last camera change (move, wheel, `F`) or button release. A `Qt::PreciseTimer`
+  single-shot `settle_` marks that window. A frame painted while moving goes through
+  `TraceRenderer::renderPreview`. It traces at `int(fb × scale)` into a private RGBA8
+  renderbuffer FBO, then `glBlitFramebuffer`s it with `GL_LINEAR` into
+  `defaultFramebufferObject()`. This is the same target and blit as dualc_field_view.
+- **Settling.** When `settle_` fires with no drag held, and the last frame was a preview,
+  the widget calls `update()` once. That frame is full resolution.
+- **Idle.** Nothing calls `update()` on a timer, so an idle widget runs no `paintGL`. Qt
+  still repaints on a resize or on the first expose. dualc_field_view instead wakes every
+  0.1 s for its file watch, but it skips the draw.
+- **Where it differs from dualc_field_view.** dualc_field_view spins at vsync while a drag is
+  held, even with the mouse still. Here a frame is painted only when the camera changes.
+  A press or release that does not move the camera paints nothing. A release only starts
+  the settle wait. With `--preview-scale 1` there is no extra settle frame.
+- **The opening.** `initializeGL` starts `settle_`, so the first frame is a preview, as in
+  dualc_field_view.
+
+`viewport_test` checks this with synthetic events. The paint log is the
+`dce.viewport.paint` logging category (`docs/command_reference/01-viewport.md`).
+
 ## Context
 
 `main` sets the default `QSurfaceFormat` to 3.3 core before any surface exists.
@@ -80,3 +105,11 @@ hidden off-screen surface.
 - On this development box (Quadro FX 3700, nouveau NV92, Mesa 26.0.8): hardware and
   `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe, LLVM 21.1.8) both render. With `DISPLAY` unset,
   the snapshot exits 77 and the ctest reports skipped.
+
+## Verified (2026-10-10, P00 T2)
+
+- `viewport_test` passes on nouveau and on llvmpipe, with the preview at 0.25 and at 1.0.
+  It checks the preview size of each drag frame, one full frame no sooner than 180 ms
+  after release, and no `paintGL` in 1 s of idle. The frame times are in
+  `HANDOFF_P00_TASK2.md`. They come from a development box, so they are not performance
+  figures (E-04).

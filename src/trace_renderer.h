@@ -4,6 +4,7 @@
 #include "orbit_camera.h"
 
 #include <QOpenGLFunctions_3_3_Core>
+#include <QSize>
 
 #include <string>
 #include <vector>
@@ -28,11 +29,22 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // Draw one width x height frame into the bound framebuffer.
   void render(int width, int height, const OrbitCamera& cam);
 
+  // dualc_field_view's adaptive preview: draw at (width x height) * scale into
+  // an offscreen RGBA8 target, then blit it up with GL_LINEAR into
+  // `targetFbo`, which is left bound. Returns the size actually traced.
+  QSize renderPreview(GLuint targetFbo, int width, int height, float scale,
+                      const OrbitCamera& cam);
+
+  // Block until the GL work issued so far has finished (frame timing).
+  void finish() { glFinish(); }
+
   // Delete the GL objects.
   void release();
 
  private:
   void releaseTextures();
+  void releasePreviewTarget();
+  void ensurePreviewTarget(int width, int height);
   void setUniform1f(const char* name, float v);
   void setUniform1i(const char* name, int v);
   void setUniform3(const char* name, const dualc::Vector3& v);
@@ -43,6 +55,8 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   GLuint program_ = 0;
   GLuint vao_ = 0;
   std::vector<GLuint> textures_;
+  GLuint previewFbo_ = 0, previewRbo_ = 0;
+  QSize previewSize_;
   dualc::BBox bounds_;
   float stepScale_ = 1.0f;
   float featureScale_ = 0.0f;

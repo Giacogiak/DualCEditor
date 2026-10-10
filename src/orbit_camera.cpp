@@ -24,3 +24,19 @@ CameraFrame cameraFrame(const OrbitCamera& cam) {
   f.up = cross(f.right, f.forward).normalize();
   return f;
 }
+
+void orbitBy(OrbitCamera& cam, double dx, double dy) {
+  cam.yaw -= dx * 0.008;
+  cam.pitch = std::clamp(cam.pitch + dy * 0.008, -1.5, 1.5);
+}
+
+void dollyBy(OrbitCamera& cam, double steps) {
+  cam.dist = std::max(cam.dist * std::pow(0.9, steps), 1e-4);
+}
+
+void panBy(OrbitCamera& cam, double dx, double dy, double viewHeight) {
+  // World units per pixel at the target's depth.
+  const double perPx = 2.0 * cam.dist * kTanHalfFov / std::max(viewHeight, 1.0);
+  const CameraFrame f = cameraFrame(cam);
+  cam.target = cam.target - f.right * (dx * perPx) + f.up * (dy * perPx);
+}

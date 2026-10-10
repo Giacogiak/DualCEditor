@@ -53,8 +53,8 @@ function(dualceditor_target_options target)
   endif()
 endfunction()
 
-add_executable(DualCEditor
-  src/main.cpp
+# Everything but main(), so tests can drive the viewport.
+add_library(dualceditor_core STATIC
   src/graph_scene.cpp
   src/graph_scene.h
   src/orbit_camera.cpp
@@ -65,9 +65,14 @@ add_executable(DualCEditor
   src/trace_renderer.h
   src/viewport.cpp
   src/viewport.h)
-target_link_libraries(DualCEditor PRIVATE
+target_include_directories(dualceditor_core PUBLIC src)
+target_link_libraries(dualceditor_core PUBLIC
   Qt6::Core Qt6::Gui Qt6::Widgets Qt6::OpenGL Qt6::OpenGLWidgets
   dualc_examples_fieldglsl)
+dualceditor_target_options(dualceditor_core)
+
+add_executable(DualCEditor src/main.cpp)
+target_link_libraries(DualCEditor PRIVATE dualceditor_core)
 target_compile_definitions(DualCEditor PRIVATE
   DUALCEDITOR_VERSION="${PROJECT_VERSION}")
 dualceditor_target_options(DualCEditor)

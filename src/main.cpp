@@ -63,7 +63,21 @@ int main(int argc, char* argv[]) {
       "snapshot", "Render one 800x600 frame off-screen to the PNG <path> and exit.",
       "path");
   parser.addOption(snapshotOption);
+  const QCommandLineOption previewOption(
+      "preview-scale",
+      "Resolution factor while the view moves, 0.1 to 1 (1 turns the preview off). "
+      "Default 0.5.",
+      "S", "0.5");
+  parser.addOption(previewOption);
   parser.process(*app);
+
+  bool scaleOk = false;
+  const float previewScale = parser.value(previewOption).toFloat(&scaleOk);
+  if (!scaleOk) {
+    std::fprintf(stderr, "DualCEditor: --preview-scale needs a number, got '%s'\n",
+                 qPrintable(parser.value(previewOption)));
+    return 1;
+  }
 
   QFile file(kDefaultGraph);
   if (!file.open(QIODevice::ReadOnly)) {
@@ -86,7 +100,7 @@ int main(int argc, char* argv[]) {
   QMainWindow window;
   window.setWindowTitle("DualCEditor");
   window.resize(1200, 800);
-  window.setCentralWidget(new Viewport(std::move(scene), &window));
+  window.setCentralWidget(new Viewport(std::move(scene), previewScale, &window));
   window.show();
 
   return app->exec();

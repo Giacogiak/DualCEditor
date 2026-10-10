@@ -94,7 +94,7 @@ void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {
   setUniform3("uCamForward", c.forward);
   setUniform3("uCamRight", c.right);
   setUniform3("uCamUp", c.up);
-  setUniform1f("uTanHalfFov", 0.41421356f);  // tan(22.5 deg)
+  setUniform1f("uTanHalfFov", float(kTanHalfFov));
   setUniform1f("uAspect", float(width) / float(std::max(height, 1)));
   setUniform3("uBoundsMin", bounds_.min);
   setUniform3("uBoundsMax", bounds_.max);
@@ -122,8 +122,46 @@ void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {
   glBindVertexArray(0);
 }
 
+QSize TraceRenderer::renderPreview(GLuint targetFbo, int width, int height,
+                                   float scale, const OrbitCamera& cam) {
+  const int sw = std::max(1, int(float(width) * scale));
+  const int sh = std::max(1, int(float(height) * scale));
+  ensurePreviewTarget(sw, sh);
+  glBindFramebuffer(GL_FRAMEBUFFER, previewFbo_);
+  render(sw, sh, cam);
+  glBindFramebuffer(GL_READ_FRAMEBUFFER, previewFbo_);
+  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFbo);
+  glBlitFramebuffer(0, 0, sw, sh, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+  glBindFramebuffer(GL_FRAMEBUFFER, targetFbo);
+  glViewport(0, 0, width, height);
+  return QSize(sw, sh);
+}
+
+// A plain RGBA8 renderbuffer, as in dualc_field_view: it is only ever blitted,
+// never sampled.
+void TraceRenderer::ensurePreviewTarget(int width, int height) {
+  if (previewFbo_ && previewSize_ == QSize(width, height)) return;
+  if (!previewFbo_) glGenFramebuffers(1, &previewFbo_);
+  if (!previewRbo_) glGenRenderbuffers(1, &previewRbo_);
+  glBindRenderbuffer(GL_RENDERBUFFER, previewRbo_);
+  glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA8, width, height);
+  glBindRenderbuffer(GL_RENDERBUFFER, 0);
+  glBindFramebuffer(GL_FRAMEBUFFER, previewFbo_);
+  glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER,
+                            previewRbo_);
+  previewSize_ = QSize(width, height);
+}
+
+void TraceRenderer::releasePreviewTarget() {
+  if (previewRbo_) glDeleteRenderbuffers(1, &previewRbo_);
+  if (previewFbo_) glDeleteFramebuffers(1, &previewFbo_);
+  previewFbo_ = previewRbo_ = 0;
+  previewSize_ = QSize();
+}
+
 void TraceRenderer::release() {
   releaseTextures();
+  releasePreviewTarget();
   if (program_) glDeleteProgram(program_);
   if (vao_) glDeleteVertexArrays(1, &vao_);
   program_ = 0;

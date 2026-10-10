@@ -17,3 +17,25 @@ add_test(NAME snapshot
   COMMAND snapshot_test $<TARGET_FILE:DualCEditor>
           ${CMAKE_CURRENT_BINARY_DIR}/snapshot.png)
 set_tests_properties(snapshot PROPERTIES SKIP_RETURN_CODE 77)
+
+# The orbit camera's drag, dolly, pan and frame maths. GL-free.
+add_executable(orbit_camera_test orbit_camera_test.cpp)
+target_link_libraries(orbit_camera_test PRIVATE dualceditor_core)
+dualceditor_target_options(orbit_camera_test)
+add_test(NAME orbit_camera COMMAND orbit_camera_test)
+
+# A live Viewport under synthetic input: preview while moving, one full frame
+# after the settle time, no paintGL while idle, F by meaning. Needs a display.
+add_executable(viewport_test viewport_test.cpp)
+target_link_libraries(viewport_test PRIVATE dualceditor_core)
+dualceditor_target_options(viewport_test)
+add_test(NAME viewport
+  COMMAND viewport_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json 0.25)
+set_tests_properties(viewport PROPERTIES SKIP_RETURN_CODE 77)
+# The same with the preview off: full-resolution frames only, and no extra
+# settle repaint.
+add_test(NAME viewport_no_preview
+  COMMAND viewport_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json 1.0)
+set_tests_properties(viewport_no_preview PROPERTIES SKIP_RETURN_CODE 77)
