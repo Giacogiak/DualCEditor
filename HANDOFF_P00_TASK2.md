@@ -117,3 +117,12 @@ Real binary, NV92, `--preview-scale 0.25`, 1200×800 window, paint log on, untou
   get frame times.
 - The paint log needs `QT_FORCE_STDERR_LOGGING=1` when stderr is piped. Otherwise Qt sends
   it to journald and it seems to vanish.
+
+## Owner check (2026-10-10)
+
+- Owner, in the live window: "Now all camera controls work." Orbit, pan, dolly and F
+  behave as expected.
+- Owner, while dragging: "blue-red-green squares around the cube, mostly on the boundaries
+  between the shape and the background." Logged as an open item for the GTX 1050 Ti test
+  (P00.5). Not fixed on the development box, by the owner's direction: the Quadro FX 3700
+  is not the reference for rendering quality.
