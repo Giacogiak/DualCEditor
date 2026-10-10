@@ -114,6 +114,15 @@ DualC's codegen has two edit tiers. A structural change recompiles. A change to 
   still does nothing. The status bar shows the last full-resolution (settled) frame and
   the last preview frame.
 
+## Measurement run (P00 T5)
+
+`src/bench.{h,cpp}` drives a bare `Viewport` for `--bench`. It steps the camera through
+`Viewport::orbitByPixels`, the same path as a mouse drag, once per `frameSwapped`, so the
+next frame is drawn as soon as the last one is presented. The default surface format gets
+swap interval 0 for the run only. GPU times are filed under the phase they arrive in; the
+phases are separated by three settle times, much longer than a query takes to come back.
+Usage and output: `../command_reference/01-viewport.md` § Measurement run.
+
 ## Context
 
 `main` sets the default `QSurfaceFormat` to 3.3 core before any surface exists.

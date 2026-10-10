@@ -1,4 +1,5 @@
 #include "gpu_preference.h"  // Optimus/PowerXpress opt-in (Windows); one TU only
+#include "bench.h"
 #include "graph_file.h"
 #include "main_window.h"
 #include "snapshot.h"
@@ -6,11 +7,13 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QGuiApplication>
+#include <QStringList>
 #include <QSurfaceFormat>
 
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <utility>
 
 namespace {
 
@@ -18,9 +21,11 @@ namespace {
 // examples/samples/gyroid_box.json, embedded at build time.
 constexpr const char* kDefaultGraph = ":/samples/gyroid_box.json";
 
-bool wantsSnapshot(int argc, char* argv[]) {
+bool hasFlag(int argc, char* argv[], const char* flag) {
+  const std::size_t n = std::strlen(flag);
   for (int i = 1; i < argc; ++i)
-    if (std::strncmp(argv[i], "--snapshot", 10) == 0) return true;
+    if (std::strncmp(argv[i], flag, n) == 0 && (argv[i][n] == '\0' || argv[i][n] == '='))
+      return true;
   return false;
 }
 
@@ -32,14 +37,18 @@ int main(int argc, char* argv[]) {
   QSurfaceFormat format;
   format.setVersion(3, 3);
   format.setProfile(QSurfaceFormat::CoreProfile);
+  // A measurement is not capped at the display's refresh rate: frames are
+  // presented as fast as they are traced, as with vsync off in the driver.
+  if (hasFlag(argc, argv, "--bench")) format.setSwapInterval(0);
   QSurfaceFormat::setDefaultFormat(format);
 
   // A snapshot opens no window, so it needs no widgets, and on a Linux box
   // with no display it falls back to the offscreen platform rather than
   // aborting: there it reports "no GL context" and the ctest skips.
-  const bool snapshot = wantsSnapshot(argc, argv);
+  const bool snapshot = hasFlag(argc, argv, "--snapshot");
 #ifdef Q_OS_LINUX
-  if (snapshot && qEnvironmentVariableIsEmpty("DISPLAY") &&
+  // --bench needs a window, so it reports "no GL context" there too.
+  if ((snapshot || hasFlag(argc, argv, "--bench")) && qEnvironmentVariableIsEmpty("DISPLAY") &&
       qEnvironmentVariableIsEmpty("WAYLAND_DISPLAY") &&
       qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
     qputenv("QT_QPA_PLATFORM", "offscreen");
@@ -64,6 +73,18 @@ int main(int argc, char* argv[]) {
       "Default 0.5.",
       "S", "0.5");
   parser.addOption(previewOption);
+  const QCommandLineOption benchOption(
+      "bench",
+      "Time the view of [graph] while orbiting and when settled, print one JSON line "
+      "and exit (docs/command_reference/01-viewport.md).");
+  parser.addOption(benchOption);
+  const QCommandLineOption benchSizeOption(
+      "bench-size", "Traced size of --bench, in device pixels. Default 1280x800.", "WxH",
+      "1280x800");
+  parser.addOption(benchSizeOption);
+  const QCommandLineOption benchFramesOption(
+      "bench-frames", "Frames timed per --bench phase. Default 60.", "N", "60");
+  parser.addOption(benchFramesOption);
   parser.addPositionalArgument(
       "graph", "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json.",
       "[graph]");
@@ -92,6 +113,27 @@ int main(int argc, char* argv[]) {
       return 2;
     }
     return renderSnapshot(*load.scene, parser.value(snapshotOption), 800, 600);
+  }
+
+  if (parser.isSet(benchOption)) {
+    BenchOptions bench;
+    bench.graph = graph;
+    bench.previewScale = previewScale;
+    const QStringList wh = parser.value(benchSizeOption).split('x');
+    bool wOk = false, hOk = false, nOk = false;
+    if (wh.size() == 2) bench.size = QSize(wh[0].toInt(&wOk), wh[1].toInt(&hOk));
+    bench.frames = parser.value(benchFramesOption).toInt(&nOk);
+    if (!wOk || !hOk || bench.size.width() < 16 || bench.size.height() < 16 || !nOk ||
+        bench.frames < 1) {
+      std::fprintf(stderr, "DualCEditor: --bench-size needs WxH and --bench-frames N >= 1\n");
+      return 1;
+    }
+    GraphLoad load = loadGraphFile(graph);
+    if (!load.scene) {
+      std::fprintf(stderr, "DualCEditor: %s\n", qPrintable(load.error));
+      return 2;
+    }
+    return runBench(std::move(*load.scene), bench);
   }
 
   // A graph that does not load still opens the window: the error is in the

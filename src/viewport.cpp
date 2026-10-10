@@ -58,9 +58,10 @@ void Viewport::initializeGL() {
     return;
   }
   glReady_ = true;
-  qInfo().noquote() << "GL renderer:"
-                    << reinterpret_cast<const char*>(
-                           context()->functions()->glGetString(GL_RENDERER));
+  QOpenGLFunctions* gl = context()->functions();
+  glRenderer_ = QString::fromLatin1(reinterpret_cast<const char*>(gl->glGetString(GL_RENDERER)));
+  glVersion_ = QString::fromLatin1(reinterpret_cast<const char*>(gl->glGetString(GL_VERSION)));
+  qInfo().noquote() << "GL renderer:" << glRenderer_;
   if (pending_) {
     std::optional<dce::fieldgraph::GlslScene> scene = std::move(pending_);
     pending_.reset();
@@ -176,6 +177,11 @@ void Viewport::pollGpuTimers() {
                                       .arg(gpuMs, 0, 'f', 1);
     emit gpuFrameTimed(frame.preview, frame.traced, gpuMs);
   }
+}
+
+void Viewport::orbitByPixels(double dx, double dy) {
+  orbitBy(camera_, dx, dy);
+  viewChanged();
 }
 
 void Viewport::viewChanged() {

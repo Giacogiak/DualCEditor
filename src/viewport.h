@@ -55,6 +55,14 @@ class Viewport : public QOpenGLWidget {
   int linkCount() const { return renderer_.linkCount(); }
   double compileMs() const { return renderer_.compileMs(); }
 
+  // A scripted orbit, as a left-drag of (dx, dy) pixels would make it: the
+  // view previews and settles as for a mouse drag. The measurement run uses it.
+  void orbitByPixels(double dx, double dy);
+
+  // GL_RENDERER and GL_VERSION of the context, once GL is up.
+  const QString& glRenderer() const { return glRenderer_; }
+  const QString& glVersion() const { return glVersion_; }
+
   const OrbitCamera& camera() const { return camera_; }
   float previewScale() const { return previewScale_; }
   bool isGLReady() const { return glReady_; }
@@ -107,6 +115,7 @@ class Viewport : public QOpenGLWidget {
   OrbitCamera camera_;
   TraceRenderer renderer_;
   bool glReady_ = false;
+  QString glRenderer_, glVersion_;
   float previewScale_;
   bool timeFrames_ = false;
   int paintCount_ = 0;

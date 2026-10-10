@@ -18,6 +18,9 @@ field's own bounds padded by 5%.
 | `graph` (positional) | `gyroid_box.json` | The graph to open. At most one; a second exits 1. In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
 | `--snapshot PATH` | off | Render one 800×600 frame of `graph` (default view) off-screen to the PNG `PATH`, then exit. Opens no window. |
 | `--preview-scale S` | `0.5` | Resolution factor while the view moves. The view is traced at `S` × the window's pixels, then upscaled linearly. It returns to full resolution 0.18 s after the last input. Clamped to 0.1 – 1. `1` turns the preview off. A value that is not a number exits 1. Same flag and default as `dualc_field_view`. |
+| `--bench` | off | Time `graph` while orbiting and when settled, print one JSON line on stdout, and exit. See *Measurement run*. Vsync is off for the run. |
+| `--bench-size WxH` | `1280x800` | Traced size of `--bench`, in device pixels. |
+| `--bench-frames N` | `60` | Frames timed in each `--bench` phase, after 3 warm-up frames. |
 | `-h`, `--help` | | Print usage and exit. |
 | `-v`, `--version` | | Print the version and exit. |
 
@@ -165,6 +168,38 @@ While a drag is held, and for 0.18 s after the last camera change or button rele
 are traced at `--preview-scale`. Then one full-resolution frame is drawn. After that the
 viewport draws nothing until the next input, a resize or an expose. Holding a drag still
 keeps the preview frame on screen and draws nothing new.
+
+## Measurement run
+
+`DualCEditor --bench [--preview-scale S] [--bench-size WxH] [--bench-frames N] [graph]`
+shows a bare viewport (no menu, docks or status bar) whose traced size is `WxH` device
+pixels, then runs two phases of `N` frames each:
+
+| Phase | Frames |
+|---|---|
+| `moving` | The camera orbits one drag pixel per presented frame, so the view previews at `S`, as under a held drag. |
+| `settled` | Full-resolution frames of a still camera, one per presented frame. |
+
+It prints one JSON object, then exits 0:
+
+| Field | Meaning |
+|---|---|
+| `moving.gpuMs`, `settled.gpuMs` | Median `GL_TIME_ELAPSED` time of a frame. A preview frame includes its upscale. |
+| `moving.wallMs`, `settled.wallMs` | Median time between presented frames (`frameSwapped`): the trace, Qt's composition and the swap. |
+| `…gpuFrames`, `…wallFrames`, `…traced` | Samples behind each median, and the size traced. |
+| `compileMs` | GL compile + link of the trace shader. Drivers cache shaders on disk: on llvmpipe the tapered octet linked in 7.2 s the first time and 0.95 s from Mesa's cache. |
+| `firstFrameMs` | Wall time from showing the window to the first presented frame. Some drivers finish compiling at the first draw, so it can be much longer than `compileMs`. |
+| `glRenderer`, `glVersion`, `qt`, `version` | What ran it. On NVIDIA, `glVersion` carries the driver version. |
+
+Exit 1 when the shader does not link or a phase takes over 60 s, 2 when the graph does not
+load, 77 with no GL 3.3 core context (on Linux with no display, as for `--snapshot`).
+`scripts/measure_viewport.py` runs it over the P00 reference scenes. Its checklist is in
+`docs/roadmap/02-measurements.md`.
+
+```bash
+./build/bin/DualCEditor --bench --preview-scale 0.35 part.json
+# {"compileMs":79.41,"firstFrameMs":…,"moving":{"gpuFrames":60,"gpuMs":17,…},"settled":{…},…}
+```
 
 ## Paint log
 

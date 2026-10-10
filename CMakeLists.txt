@@ -55,6 +55,8 @@ endfunction()
 
 # Everything but main(), so tests can drive the viewport.
 add_library(dualceditor_core STATIC
+  src/bench.cpp
+  src/bench.h
   src/graph_file.cpp
   src/graph_file.h
   src/graph_scene.cpp

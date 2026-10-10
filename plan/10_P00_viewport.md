@@ -95,6 +95,13 @@ use `__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia`. Scenes to me
 
 Measure each at preview scales 0.35, 0.5 and 1.0, in a 1280×800 window.
 
+Notes from the unit (2026-10-10):
+- "1280×800" is the traced size: `--bench` shows a bare viewport of 1280×800 device
+  pixels. The frame-time comparison with `dualc_field_view` runs at 1100×800, the size of
+  its window.
+- `mesh_lattice.json` names `cube.obj`, which DualC only generates at build time.
+  `scripts/measure_viewport.py` writes the same cube beside a copy of the graph.
+
 #### Acceptance criteria
 - `docs/roadmap/02-measurements.md` has one row per scene and scale, with the moving and
   settled frame ms, the compile ms, and the commit, OS and driver.

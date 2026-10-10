@@ -61,3 +61,14 @@ add_test(NAME parameter_dock
   COMMAND parameter_dock_test
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
 set_tests_properties(parameter_dock PROPERTIES SKIP_RETURN_CODE 77)
+
+# `DualCEditor --bench` (the measurement run of scripts/measure_viewport.py)
+# times both phases of a small view and prints one JSON line with GPU times.
+add_test(NAME bench
+  COMMAND DualCEditor --bench --bench-size 160x100 --bench-frames 4
+          --preview-scale 0.5
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+set_tests_properties(bench PROPERTIES
+  SKIP_RETURN_CODE 77
+  PASS_REGULAR_EXPRESSION
+  "\"moving\":{\"gpuFrames\":[1-9][0-9]*,\"gpuMs\":[0-9.]+,\"traced\":\\[80,50\\].*\"settled\":{\"gpuFrames\":[1-9][0-9]*,\"gpuMs\":[0-9.]+,\"traced\":\\[160,100\\]")
