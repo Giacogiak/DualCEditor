@@ -5,13 +5,81 @@ OS and driver, window size, and how the number was taken: GPU timer query, or wa
 
 | Date | Unit | Scene | Window | Preview scale | Frame ms (moving) | Frame ms (settled) | Shader compile ms | Commit, OS, driver |
 |---|---|---|---|---|---|---|---|---|
+| 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 0.35 | 0.8 GPU / 3.8 wall (448×280) | 2.7 GPU / 5.3 wall | 27.7 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 0.5 | 1.1 GPU / 3.8 wall (640×400) | 2.6 GPU / 4.2 wall | 26.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 1 | 3.4 GPU / wall garbled in the report, to re-ask | garbled in the report, to re-ask | 19.6 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 0.35 | 80.6 GPU / 83.3 wall (448×280) | 385.3 GPU / 389.5 wall | 19.0 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 0.5 | 127.6 GPU / 128.6 wall (640×400) | 375.7 GPU / 372.2 wall | 30.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 1 | 402.0 GPU / 395.7 wall (1280×800), to confirm* | 389.8 GPU / 360.9 wall, to confirm* | 26.7 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.35 | 1.9 GPU / 3.9 wall (448×280) | 7.3 GPU / 8.2 wall | 22.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.5 | 2.7 GPU / wall garbled in the report, to re-ask | garbled in the report, to re-ask | 23.4 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 1 | 8.0 GPU / 8.9 wall (1280×800) | 7.3 GPU / 8.3 wall | 21.2 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+
+P00.5 conditions: `scripts/measure_viewport.py --field-view …` at commit 53c6cb6, Windows 10,
+GeForce GTX 1050 Ti/PCIe/SSE2, driver 441.93 (GL 3.3.0), Qt 6.8.3 msvc2022_64, MSVC 14.44,
+Release, display scaling 100%, mains power, Balanced power plan. *Window* is the traced
+size. Each cell is the median of 60 frames: *GPU* is the `GL_TIME_ELAPSED` query, *wall* the
+time between presented frames, vsync off. The moving cell gives the preview size traced.
+Compile ms are with the driver's shader cache warm (second run). In the owner's first run,
+one value each read 945.4 ms (mesh_lattice 0.35) and 327.1 ms (tapered octet 0.35), and all
+the others 14–31 ms: the cold compiles. Cells marked *garbled* did not survive the copy from
+the laptop. \*The report flags the tapered octet 1.0 row as garbled too, though every cell
+reads; its settled wall (360.9) under its GPU (389.8) is suspect.
 
 ## Against dualc_field_view (P00 T5)
 
 Same laptop, same DualC pin, vsync off, a 1100×800 view (dualc_field_view's window).
 
-| Date | Scene | Preview scale | Editor ms (moving / settled, wall) | dualc_field_view ms (moving / settled) | Snapshot diff (800×600) |
+The comparable numbers are the editor's `moving.wallMs` and dualc_field_view's frame time
+during a held drag: dualc_field_view draws back to back only while the view moves (see the
+checklist, step 5). Its frame time when still is not a render time, so it is not listed.
+
+| Date | Scene | Preview scale | Editor moving / settled (wall ms) | dualc_field_view drag ms, median (mean, frames) | Editor against dualc_field_view, moving |
 |---|---|---|---|---|---|
+| 2026-10-10 | gyroid_box.json | 0.35 | 3.2 / 3.7 | 2.9 (2.9, 2020) | +10% (+0.3 ms) |
+| 2026-10-10 | gyroid_box.json | 1.0 | 4.6 / 3.4 | 4.0 (4.1, 1468) | +15% (+0.6 ms) |
+| 2026-10-10 | tapered octet (P12) | 0.35 | 77.7 / 333.2 | 73.0 (73.1, 76) | +6% |
+| 2026-10-10 | tapered octet (P12) | 1.0 | 271.7 / 329.5 | 393.2 (376.0, 10) | −31%, not like for like: the viewer's window size was not checked |
+| 2026-10-10 | mesh_lattice.json | 0.35 | 4.4 / 8.0 | 4.5 (4.5, 1314) | −2% |
+| 2026-10-10 | mesh_lattice.json | 1.0 | 9.2 / 7.9 | 8.0 (7.9, 747) | +15% (+1.2 ms) |
+
+dualc_field_view was timed with PresentMon 2.6.0, 6 s per capture. Same conditions as above.
+
+Snapshots, editor against `dualc_field_view --snapshot`, 800×600, default view:
+
+| Scene | Pixels that differ | Max channel diff |
+|---|---|---|
+| gyroid_box.json | 111 / 480 000 | 1 |
+| tapered octet (P12) | 44 / 480 000 | 1 |
+| mesh_lattice.json | 715 / 480 000 | 20 (the owner looked: no visible difference) |
+
+## Findings (P00 T5)
+
+- **The image matches dualc_field_view** on all three scenes (table above).
+- **Frame time.** The moving frame time is within 10% of dualc_field_view on three of six
+  rows. On the two light 1.0 rows (gyroid and mesh_lattice), the editor is 15% slower:
+  +0.6 ms and +1.2 ms per frame. That may be a fixed cost per frame rather than a slower
+  trace. The editor's wall time stays at or above about 3.8 ms at 1280×800 (3.2 ms at
+  1100×800), even when the GPU trace takes 0.8 ms. That fits QOpenGLWidget composing its
+  framebuffer into the window before each swap. mesh_lattice at 0.35 shows no such cost
+  (−2%), so this is not settled. On the heavy scene, +6% at 0.35 is within the noise.
+  The octet 1.0 row needs a re-run with the viewer's window checked at 1100×800. The
+  viewer's 393 ms is close to the editor's 1280×800 times (390–402 ms). The scene is also
+  noisy: the editor's own full-resolution frames at 1100×800 read 272 ms moving and 330 ms
+  settled.
+- **The tapered octet is not interactive on the reference GPU.** About 81 ms per moving
+  frame at 0.35 and 128 ms at 0.5 (8–12 fps), and 375–390 ms per full frame. The owner
+  saw the lag in the live window. dualc_field_view is no faster (73 ms at 0.35). The light
+  scenes run at 3–9 ms, full resolution included.
+- **No coloured squares on the GTX.** The blue-red-green squares on the silhouette while
+  dragging (P00 T2) were seen on the Quadro FX 3700 (nouveau) only.
+- **Open: the status bar's settled `frame` reads high on light scenes.** In the live window
+  at 0.5 (docks closed, window size not fixed), `frame` / `preview` read 30 / 1.0 ms for the
+  gyroid and 48 / 1.4 ms for mesh_lattice. The bench gives 2.6 / 1.1 and 7.3 / 2.7. The
+  preview agrees, and the octet's frame and preview are both about 0.63× the bench's,
+  which fits a smaller window. The owner's hypothesis, not yet verified: the single settled
+  frame runs after the GPU has dropped its clocks at the end of the drag, while the bench's
+  back-to-back frames keep it boosted. A test would time one full frame after an idle gap.
 
 ## How to measure (P00 T5 checklist)
 
@@ -29,7 +97,10 @@ Vsync is off for the run (swap interval 0), so the wall time is not rounded to t
 display's refresh.
 
 1. **Build** a Release tree at the commit to measure (`CLAUDE.md` § Build). Plug the
-   laptop in to mains power, and close other GPU work.
+   laptop in to mains power, and close other GPU work. On Windows the build does not
+   deploy Qt: run `windeployqt` on `DualCEditor.exe` (and on `dualc_field_view.exe` if it
+   links Qt), or put Qt's `bin` on `PATH`. P00.5 used Qt 6.8.3 msvc2022_64 from
+   aqtinstall, MSVC 14.44 and Ninja.
 2. **Check the GPU.** On Linux PRIME:
    `__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia glxinfo -B | grep -i renderer`
    must name the GTX 1050 Ti. On Windows, `gpu_preference.h` asks the driver for the
@@ -55,24 +126,26 @@ display's refresh.
    The script renders each scene through both `--snapshot`s at 800×600 and prints the
    pixels that differ. On the development box, the gyroid differed in 198 of 480 000
    pixels, by at most 2 per channel (P00 T1).
-5. **Compare the frame time** with dualc_field_view. It prints no frame time, but it draws
-   continuously, so with vsync off its frame rate gives its wall ms per frame (1000 / fps).
-   For each scene, at preview scales 0.35 and 1.0:
-   - dualc_field_view, window left at its default 1100×800 and not resized:
+5. **Compare the frame time** with dualc_field_view. It prints no frame time. It draws
+   back to back only while the view moves: when settled, it waits up to 0.1 s for input
+   before each redraw (`examples/dualc_field_view.cpp`, the main loop). So only its frame
+   time **during a held left-drag** is a render time. Compare it with the editor's
+   `moving.wallMs`. Its frame time with the view still is the wait, not the trace. For each
+   scene, at preview scales 0.35 and 1.0 (at 1.0 the drag frames are full resolution):
+   - dualc_field_view, with its window at the default 1100×800. Do not resize or maximize
+     it, and keep display scaling at 100%, or its framebuffer is not 1100×800:
      - Linux:
        `__GL_SYNC_TO_VBLANK=0 __GL_SHOW_GRAPHICS_OSD=1 __NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia dualc_field_view --preview-scale S <graph>`.
-       The NVIDIA overlay shows the fps.
+       The NVIDIA overlay shows the fps (ms = 1000 / fps).
      - Windows: in the NVIDIA Control Panel, set *Vertical sync* to *Off* for
-       `dualc_field_view.exe`, and read the fps from the NVIDIA overlay (Alt+R) or
-       PresentMon.
-
-     Read the fps with the view still (settled), then while holding a left-drag (moving).
+       `dualc_field_view.exe`. Capture the frame times with PresentMon, from an
+       administrator shell, for a few seconds of continuous drag, and take the median.
+       The Alt+R overlay needs GeForce Experience 3.20 or later.
    - The editor, at the same size:
      `DualCEditor --bench --bench-size 1100x800 --preview-scale S <graph>`, with the
-     PRIME variables on Linux. Read `moving.wallMs` and `settled.wallMs`.
+     PRIME variables on Linux. Read `moving.wallMs`.
 
-   Fill the second table. "Within about 10%" is the plan's bar. Display scaling must be
-   100%, or dualc_field_view's framebuffer is not 1100×800.
+   Fill the second table. "Within about 10%" is the plan's bar.
 6. **Look at the live window.** `DualCEditor --preview-scale 0.5`, then close the
    Parameters and Log docks:
    - Orbit each scene. Does it feel responsive at 0.35 and 0.5?

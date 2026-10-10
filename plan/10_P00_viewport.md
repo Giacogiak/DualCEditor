@@ -101,6 +101,8 @@ Notes from the unit (2026-10-10):
   its window.
 - `mesh_lattice.json` names `cube.obj`, which DualC only generates at build time.
   `scripts/measure_viewport.py` writes the same cube beside a copy of the graph.
+- Only moving frame times can be compared with `dualc_field_view`: when settled, it waits
+  up to 0.1 s for input before each redraw, so its settled frame time is not a render time.
 
 #### Acceptance criteria
 - `docs/roadmap/02-measurements.md` has one row per scene and scale, with the moving and

@@ -2,9 +2,11 @@
 
 Date: 2026-10-10. Plan: `plan/10_P00_viewport.md` § T5. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: blocked on the owner.** The tooling and the checklist are in. The measurements
-themselves need the GTX 1050 Ti laptop (E-04), so T5's acceptance criteria and P00's exit
-criteria are not met yet. See *Exit criteria* below.
+**Status: the owner has measured on the laptop. Three garbled rows are blocked on the
+owner.** The owner ran the checklist on the GTX 1050 Ti (Windows 10, driver 441.93, commit
+53c6cb6). The results are in `docs/roadmap/02-measurements.md`. In two of the nine rows,
+cells did not survive the copy from the laptop. The report also flags a third row (tapered
+octet 1.0) as garbled. Their raw JSON lines are asked for again, rather than guessed.
 
 ## What changed and why
 
@@ -67,7 +69,51 @@ These numbers only show that the tools work. They are not performance figures (E
   across the same two drivers, so the decoder and the diff agree with T1's tool.
 - `python scripts/check.py`: green, 8/8 ctests.
 
+## Owner's results (2026-10-10, second session)
+
+Conditions: Windows 10, GeForce GTX 1050 Ti, driver 441.93 (GL 3.3.0), Qt 6.8.3
+msvc2022_64 (aqtinstall), MSVC 14.44, Ninja, Release, commit 53c6cb6. ctest 8/8 passed on
+the laptop. Display scaling 100%, mains power, Balanced plan. The tables are in
+`docs/roadmap/02-measurements.md`. In brief:
+- 1280×800, settled GPU / wall ms: gyroid 2.6–2.7 / 4.2–5.3; mesh_lattice 7.3 / 8.2–8.3;
+  tapered octet 376–390 / 361–390. Moving at 0.35: gyroid 0.8 / 3.8, mesh_lattice
+  1.9 / 3.9, octet 80.6 / 83.3. Compile 19–30 ms with a warm shader cache. The cold
+  compiles of the first run were 945.4 ms (mesh_lattice) and 327.1 ms (octet).
+- Garbled cells: gyroid 1.0, moving wall and settled; mesh_lattice 0.5, moving wall and
+  settled. The tapered octet 1.0 row is flagged too, and its settled wall (360.9) under its
+  GPU (389.8) is suspect.
+- Live window: gyroid and mesh_lattice are immediate. The tapered octet lags, mostly at
+  the start of a drag. No coloured squares on any scene, so T2's artefact is a nouveau and
+  Quadro matter.
+
+### Does the viewport match dualc_field_view on the same laptop?
+
+- **Image: yes.** 800×600 snapshots differ in 111 px (gyroid), 44 px (octet) and 715 px
+  (mesh_lattice) out of 480 000, by at most 1, 1 and 20 per channel. The owner saw no
+  visible difference on mesh_lattice.
+- **Frame time: within about 10% where the comparison is like for like, with one
+  exception at small absolute cost.** The comparison is dualc_field_view's drag frame time
+  (PresentMon median) against the editor's `--bench --bench-size 1100x800`
+  `moving.wallMs`:
+  - within 10%: gyroid 0.35 (+10%), octet 0.35 (+6%), mesh_lattice 0.35 (−2%);
+  - over 10%: gyroid 1.0 and mesh_lattice 1.0, both +15% (+0.6 ms and +1.2 ms per frame),
+    likely a fixed per-frame composition cost of QOpenGLWidget;
+  - not like for like: octet 1.0 (272 against 393 ms, the editor faster). The viewer's
+    window size was not checked, and its 393 ms matches the editor's 1280×800 times.
+
+  Settled frames cannot be compared: dualc_field_view only draws back to back while the
+  view moves.
+
 ## What I got wrong on the way
+
+- **The first checklist said dualc_field_view draws continuously.** It does not: when
+  settled, it waits up to 0.1 s for input before each redraw. I read its main loop's
+  drawing half and missed the wait policy above it. The owner caught it. Their "still"
+  numbers (for example 33.1 ms for the gyroid at 1.0) are waits, not traces. Step 5 of the
+  checklist now compares only the drag frame time with `moving.wallMs`. On Windows it names
+  PresentMon (admin shell), since the Alt+R overlay needs GeForce Experience 3.20 or later.
+- The checklist did not say that the Windows build does not deploy Qt. The owner ran
+  `windeployqt`. Step 1 now says so.
 
 - My first wording of `firstFrameMs` in the command reference said llvmpipe takes "over
   30 s" to the first octet frame. I had not measured that. It was a whole-process time
@@ -80,32 +126,39 @@ These numbers only show that the tools work. They are not performance figures (E
 
 - **T1–T4 met**: yes, see `HANDOFF_P00_TASK1.md` to `HANDOFF_P00_TASK4.md`. The owner
   checked T2's camera live.
-- **T5 met**: **no.** `02-measurements.md` has no GTX rows yet, and the dualc_field_view
-  match is not stated. Both need the owner's run of the checklist.
-- **`python scripts/check.py` green**: yes, 8/8 ctests on the development box.
-- **`docs/roadmap/README.md` § Current focus names P01**: **not yet.** It says that P00
-  closes when the GTX numbers are in. Naming P01 before T5 is met would misstate the
-  status.
+- **T5 met**: **not quite.** The match with dualc_field_view is stated above. The
+  measurements table has all nine rows, but two of them lack the moving wall and settled
+  cells (gyroid 1.0 and mesh_lattice 0.5), which were garbled in the report. The tapered
+  octet 1.0 row needs confirming. The owner is asked for the three raw JSON lines from
+  `measurements-2026-10-10.jsonl`.
+- **`python scripts/check.py` green**: yes, 8/8 ctests on the development box. On the
+  laptop, ctest 8/8 passed.
+- **`docs/roadmap/README.md` § Current focus names P01**: **not yet.** It names the
+  three missing rows as the last step of P00.
 
 ## Open
 
-- **The owner's run** (needsHumanCheck): `docs/roadmap/02-measurements.md` § How to measure,
-  steps 1–6. Then paste back:
-  - the script's nine rows and its `GPU:` line;
-  - the `--field-view` diff lines;
-  - the dualc_field_view fps against the editor's `--bench --bench-size 1100x800` wall ms;
-  - what the live window looks like, including whether T2's blue-red-green squares on the
-    silhouette during a drag show on the GTX.
-- **Comparing frame times with dualc_field_view is indirect.** It prints no timing, so its
-  side is read from the NVIDIA overlay or PresentMon with vsync off. The editor's matching
-  number is the wall ms, not the GPU ms. Proper timing in dualc_field_view would be a DualC
-  change (rule 5).
-- `--bench` is untested on Windows and on HiDPI. The size is set in logical pixels as
-  `size / devicePixelRatio`, and the JSON reports the size actually traced.
+- **The garbled cells** (above). With the JSON lines, fill the cells, drop the *garbled*
+  and *to confirm* marks, and switch the current focus to P01.
+- **The status bar's settled `frame` reads 7–12× high on light scenes** in the live window
+  (30 against 2.6 ms for the gyroid), while the preview agrees. The owner's hypothesis is
+  that the GPU drops its clocks once the drag ends, before the one settled frame. It is not
+  verified. To test it, time a full frame after an idle gap in `--bench`. It does not block
+  P01. The status bar is diagnostic, and the bench numbers are the measurements.
+- **The light-scene composition cost** (+0.6 to +1.2 ms per frame at 1.0) against
+  dualc_field_view. It is small in absolute terms. It is worth a look if P01 wants many
+  objects at high frame rates: drawing to the window directly, without QOpenGLWidget's
+  framebuffer, would avoid it.
+- **The tapered octet 1.0 comparison** needs a re-run with the viewer's window checked at
+  1100×800.
+- **The tapered octet is not interactive on the reference GPU** (8–12 fps at 0.35–0.5).
+  dualc_field_view is no faster. This is input for P02's go/no-go.
+- `--bench` on HiDPI is still untested. It ran on Windows at 100% scaling.
 
 ## For the next unit
 
-- Once the numbers are back: fill both tables in `02-measurements.md`, state the
-  dualc_field_view match in this handoff, switch `docs/roadmap/README.md` § Current focus
-  to P01, and log any finding: a mismatch, the preview artefacts.
-- P01 T4 (frame time against object count) can reuse `--bench` and the script.
+- P00.5 resumes only to fill the three rows and switch the current focus to P01.
+- P01 T4 (frame time against object count) can reuse `--bench` and
+  `scripts/measure_viewport.py`. Compare `moving.wallMs` only with a viewer's drag frame
+  time, and fix both window sizes.
+- On Windows, deploy Qt with `windeployqt` before running the binaries.

@@ -9,9 +9,10 @@ the adaptive preview, which settles after 180 ms and does not repaint while idle
 done: a graph opens by `File ▸ Open`, by argument or by a drop. It reloads when saved, and
 a broken file shows its error and keeps the last image. T4 is done: a Parameters dock edits
 the graph's bindings as uniforms only, with no relink, and the status bar shows the
-shader compile ms and the GPU ms of the last settled frame. T5's tooling is in: a
-`--bench` measurement run, `scripts/measure_viewport.py` and the checklist in
-`02-measurements.md`. P00 closes when the owner's GTX 1050 Ti numbers are in that page.
+shader compile ms and the GPU ms of the last settled frame. T5: the owner measured
+on the GTX 1050 Ti with `--bench` and `scripts/measure_viewport.py` (`02-measurements.md`).
+The image matches dualc_field_view, and so does the frame time, within about 10% on the
+like-for-like rows. P00 closes when three garbled table rows are re-sent by the owner.
 
 ## Next up
 
