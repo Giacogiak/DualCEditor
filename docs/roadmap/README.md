@@ -6,7 +6,8 @@ P00: the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the vi
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches
 `dualc_field_view`. T2 is done: the orbit camera (orbit, dolly, pan, `F` to frame) and
 the adaptive preview, which settles after 180 ms and does not repaint while idle. T3 is
-next: open a graph file by menu, by argument or by drag and drop.
+done: a graph opens by `File ▸ Open`, by argument or by a drop. It reloads when saved, and
+a broken file shows its error and keeps the last image. T4 is next: the parameter dock.
 
 ## Next up
 

@@ -39,3 +39,14 @@ add_test(NAME viewport_no_preview
   COMMAND viewport_test
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json 1.0)
 set_tests_properties(viewport_no_preview PROPERTIES SKIP_RETURN_CODE 77)
+
+# A live MainWindow: a drop of a .json and a .fld renders it, the file watch
+# reloads a save and keeps the camera, a broken file or shader shows its error
+# and keeps the image; the command-line argument through --snapshot.
+add_executable(main_window_test main_window_test.cpp)
+target_link_libraries(main_window_test PRIVATE dualceditor_core)
+dualceditor_target_options(main_window_test)
+add_test(NAME main_window
+  COMMAND main_window_test $<TARGET_FILE:DualCEditor>
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+set_tests_properties(main_window PROPERTIES SKIP_RETURN_CODE 77)

@@ -17,11 +17,13 @@
 Q_LOGGING_CATEGORY(lcPaint, "dce.viewport.paint", QtInfoMsg)
 
 Viewport::Viewport(dce::fieldgraph::GlslScene scene, float previewScale, QWidget* parent)
-    : QOpenGLWidget(parent),
-      scene_(std::move(scene)),
-      previewScale_(std::clamp(previewScale, 0.1f, 1.0f)) {
+    : Viewport(previewScale, parent) {
+  setScene(std::move(scene), true);
+}
+
+Viewport::Viewport(float previewScale, QWidget* parent)
+    : QOpenGLWidget(parent), previewScale_(std::clamp(previewScale, 0.1f, 1.0f)) {
   setFocusPolicy(Qt::StrongFocus);
-  frameBounds(camera_, scene_.bounds);
   timeFrames_ = lcPaint().isDebugEnabled();
   settle_.setSingleShot(true);
   settle_.setTimerType(Qt::PreciseTimer);
@@ -47,15 +49,26 @@ void Viewport::initializeGL() {
     const QSurfaceFormat f = context()->format();
     qCritical().noquote() << "Viewport: need an OpenGL 3.3 core context, got"
                           << QString("%1.%2").arg(f.majorVersion()).arg(f.minorVersion());
+    if (pending_) {
+      pending_.reset();
+      emit sceneFailed("no OpenGL 3.3 core context");
+    }
     return;
   }
   glReady_ = true;
   qInfo().noquote() << "GL renderer:"
                     << reinterpret_cast<const char*>(
                            context()->functions()->glGetString(GL_RENDERER));
-  std::string error;
-  if (!renderer_.setScene(scene_, &error))
-    qCritical().noquote() << "Viewport:" << QString::fromStdString(error);
+  if (pending_) {
+    std::optional<dce::fieldgraph::GlslScene> scene = std::move(pending_);
+    pending_.reset();
+    linkScene(std::move(*scene), pendingFrame_);
+  } else if (hasScene_) {
+    // A new context (reparenting): relink the scene on screen.
+    std::string error;
+    if (!renderer_.setScene(scene_, &error))
+      qCritical().noquote() << "Viewport:" << QString::fromStdString(error);
+  }
   // Open inside the settle window, as dualc_field_view does: the first frame
   // is a quick preview instead of a heavy full-resolution trace.
   settle_.start();
@@ -85,6 +98,42 @@ void Viewport::paintGL() {
                                     .arg(traced.height())
                                     .arg(ms, 0, 'f', 1);
   emit frameDrawn(preview, traced, ms);
+}
+
+void Viewport::setScene(dce::fieldgraph::GlslScene scene, bool frame) {
+  if (!context()) {
+    // GL is not up yet: initializeGL links it. A later scene replaces an
+    // earlier pending one; a frame request is kept.
+    pendingFrame_ = pending_ ? pendingFrame_ || frame : frame;
+    pending_ = std::move(scene);
+    return;
+  }
+  if (!glReady_) {
+    emit sceneFailed("no OpenGL 3.3 core context");
+    return;
+  }
+  makeCurrent();
+  linkScene(std::move(scene), frame);
+  doneCurrent();
+}
+
+void Viewport::linkScene(dce::fieldgraph::GlslScene scene, bool frame) {
+  std::string error;
+  if (!renderer_.setScene(scene, &error)) {
+    // The previous program, grids and image stay: nothing repaints.
+    emit sceneFailed(QString::fromStdString(error));
+    return;
+  }
+  const bool first = !hasScene_;
+  scene_ = std::move(scene);
+  hasScene_ = true;
+  if (frame || first) {
+    frameBounds(camera_, scene_.bounds);
+    cameraChanged();
+  } else {
+    update();
+  }
+  emit sceneApplied();
 }
 
 void Viewport::cameraChanged() {
@@ -136,7 +185,7 @@ void Viewport::wheelEvent(QWheelEvent* event) {
 void Viewport::keyPressEvent(QKeyEvent* event) {
   // Keys are matched by the character they type, never by key position, so
   // they follow the user's layout (the owner types on Belgian AZERTY).
-  if (event->text().compare("f", Qt::CaseInsensitive) == 0) {
+  if (event->text().compare("f", Qt::CaseInsensitive) == 0 && hasScene_) {
     frameBounds(camera_, scene_.bounds);
     cameraChanged();
     return;

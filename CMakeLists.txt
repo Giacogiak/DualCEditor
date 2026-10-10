@@ -55,8 +55,12 @@ endfunction()
 
 # Everything but main(), so tests can drive the viewport.
 add_library(dualceditor_core STATIC
+  src/graph_file.cpp
+  src/graph_file.h
   src/graph_scene.cpp
   src/graph_scene.h
+  src/main_window.cpp
+  src/main_window.h
   src/orbit_camera.cpp
   src/orbit_camera.h
   src/snapshot.cpp

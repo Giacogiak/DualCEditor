@@ -9,4 +9,4 @@ by meaning (`QKeyEvent::text()`, arrows, function keys), never by physical posit
 
 ## Files
 
-- `01-viewport.md` — launch flags (`--snapshot`, `--preview-scale`), exit codes, the viewport's mouse and key bindings, and the paint log.
+- `01-viewport.md` — launch flags (`graph`, `--snapshot`, `--preview-scale`), exit codes, opening a graph (File ▸ Open, argument, drag and drop), reload on save, error reporting, the window's menus and Log dock, the viewport's mouse and key bindings, and the paint log.

@@ -1,26 +1,21 @@
 #include "gpu_preference.h"  // Optimus/PowerXpress opt-in (Windows); one TU only
-#include "graph_scene.h"
+#include "graph_file.h"
+#include "main_window.h"
 #include "snapshot.h"
-#include "viewport.h"
 
 #include <QApplication>
 #include <QCommandLineParser>
-#include <QFile>
 #include <QGuiApplication>
-#include <QMainWindow>
 #include <QSurfaceFormat>
 
 #include <cstdio>
 #include <cstring>
 #include <memory>
-#include <utility>
-
-namespace fg = dce::fieldgraph;
 
 namespace {
 
-// The graph the viewport opens on until files can be opened (plan/10_P00 T3):
-// DualC's examples/samples/gyroid_box.json, embedded at build time.
+// The graph the window opens on when no file is named: DualC's
+// examples/samples/gyroid_box.json, embedded at build time.
 constexpr const char* kDefaultGraph = ":/samples/gyroid_box.json";
 
 bool wantsSnapshot(int argc, char* argv[]) {
@@ -69,7 +64,18 @@ int main(int argc, char* argv[]) {
       "Default 0.5.",
       "S", "0.5");
   parser.addOption(previewOption);
+  parser.addPositionalArgument(
+      "graph", "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json.",
+      "[graph]");
   parser.process(*app);
+  if (parser.positionalArguments().size() > 1) {
+    std::fprintf(stderr, "DualCEditor: one graph at most, got %d\n",
+                 int(parser.positionalArguments().size()));
+    return 1;
+  }
+  const QString graph = parser.positionalArguments().isEmpty()
+                            ? QString(kDefaultGraph)
+                            : parser.positionalArguments().first();
 
   bool scaleOk = false;
   const float previewScale = parser.value(previewOption).toFloat(&scaleOk);
@@ -79,28 +85,20 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  QFile file(kDefaultGraph);
-  if (!file.open(QIODevice::ReadOnly)) {
-    std::fprintf(stderr, "DualCEditor: cannot read %s\n", kDefaultGraph);
-    return 1;
-  }
-  fg::GlslScene scene;
-  try {
-    fg::FileMeshResolver meshes;
-    scene = compileGraphText(file.readAll().toStdString(), true, meshes);
-  } catch (const fg::GraphError& e) {
-    std::fprintf(stderr, "DualCEditor: field-graph error%s%s: %s\n",
-                 e.pointer().empty() ? "" : " at ", e.pointer().c_str(), e.what());
-    return 2;
+  if (parser.isSet(snapshotOption)) {
+    GraphLoad load = loadGraphFile(graph);
+    if (!load.scene) {
+      std::fprintf(stderr, "DualCEditor: %s\n", qPrintable(load.error));
+      return 2;
+    }
+    return renderSnapshot(*load.scene, parser.value(snapshotOption), 800, 600);
   }
 
-  if (parser.isSet(snapshotOption))
-    return renderSnapshot(scene, parser.value(snapshotOption), 800, 600);
-
-  QMainWindow window;
-  window.setWindowTitle("DualCEditor");
+  // A graph that does not load still opens the window: the error is in the
+  // status bar and the log, and the file is watched, so fixing it renders it.
+  MainWindow window(previewScale);
   window.resize(1200, 800);
-  window.setCentralWidget(new Viewport(std::move(scene), previewScale, &window));
+  window.openFile(graph);
   window.show();
 
   return app->exec();
