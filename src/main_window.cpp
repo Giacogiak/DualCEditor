@@ -1,6 +1,7 @@
 #include "main_window.h"
 
 #include "graph_file.h"
+#include "parameter_panel.h"
 #include "viewport.h"
 
 #include <QAction>
@@ -12,6 +13,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QKeySequence>
+#include <QLabel>
 #include <QMenuBar>
 #include <QMimeData>
 #include <QPlainTextEdit>
@@ -49,6 +51,17 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   // A few lines high: the viewport keeps most of the window.
   resizeDocks({dock}, {fontMetrics().lineSpacing() * 5}, Qt::Vertical);
 
+  parameters_ = new ParameterPanel(this);
+  parameters_->setAcceptDrops(false);
+  auto* paramDock = new QDockWidget("Parameters", this);
+  paramDock->setObjectName("parameters");
+  paramDock->setWidget(parameters_);
+  addDockWidget(Qt::RightDockWidgetArea, paramDock);
+  resizeDocks({paramDock}, {fontMetrics().averageCharWidth() * 34}, Qt::Horizontal);
+  // An edit sets one uniform: no recompile, no relink.
+  connect(parameters_, &ParameterPanel::parameterEdited, viewport_,
+          &Viewport::setParameter);
+
   QMenu* fileMenu = menuBar()->addMenu("&File");
   QAction* open = fileMenu->addAction("&Open...", this, &MainWindow::openDialog);
   open->setShortcut(QKeySequence::Open);
@@ -56,13 +69,23 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   QAction* quit = fileMenu->addAction("&Quit", this, &QWidget::close);
   quit->setShortcut(QKeySequence::Quit);
   QMenu* viewMenu = menuBar()->addMenu("&View");
+  viewMenu->addAction(paramDock->toggleViewAction());
   viewMenu->addAction(dock->toggleViewAction());
 
   statusBar()->showMessage("No graph open");
+  timing_ = new QLabel(this);
+  timing_->setObjectName("timing");
+  statusBar()->addPermanentWidget(timing_);
+  showTiming();
 
   // The viewport links shaders now or, before GL is up, at its first paint;
   // either way the result of a load arrives here.
   connect(viewport_, &Viewport::sceneApplied, this, [this] {
+    // Every new scene brings its own bindings: the dock follows it.
+    nodeOps_ = std::move(loadingOps_);
+    loadingOps_.clear();
+    parameters_->setBindings(viewport_->scene().bindings, nodeOps_);
+    showTiming();
     if (!loading_) return;
     loading_ = false;
     const QString name = QFileInfo(file_).fileName();
@@ -70,7 +93,9 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
                                  .arg(name)
                                  .arg(viewport_->scene().nodeCount)
                                  .arg(viewport_->scene().bindings.size()));
-    log(QString("loaded %1").arg(file_));
+    log(QString("loaded %1, shader compile %2 ms")
+            .arg(file_)
+            .arg(viewport_->compileMs(), 0, 'f', 1));
     emit loadFinished(true);
   });
   connect(viewport_, &Viewport::sceneFailed, this, [this](const QString& error) {
@@ -78,6 +103,12 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     loading_ = false;
     reportError("shader error: " + error.trimmed());
   });
+
+  connect(viewport_, &Viewport::gpuFrameTimed, this,
+          [this](bool preview, QSize, double ms) {
+            (preview ? previewMs_ : frameMs_) = ms;
+            showTiming();
+          });
 
   reload_.setSingleShot(true);
   reload_.setInterval(kReloadDelayMs);
@@ -146,6 +177,7 @@ void MainWindow::load(bool frame) {
     return;
   }
   loading_ = true;
+  loadingOps_ = std::move(result.nodeOps);
   viewport_->setScene(std::move(*result.scene), frame);
 }
 
@@ -157,6 +189,23 @@ void MainWindow::reportError(const QString& error) {
       QString("%1: %2%3").arg(name, error.section('\n', 0, 0), keep));
   log(QString("%1: %2%3").arg(file_, error, keep));
   emit loadFinished(false);
+}
+
+QString MainWindow::timingText() const {
+  return timing_->text();
+}
+
+// The shader compile and link time of the scene on screen; the GPU time of the
+// last full-resolution (settled) frame and of the last preview frame.
+void MainWindow::showTiming() {
+  const auto ms = [](double v) {
+    return v < 0.0 ? QString("-") : QString("%1 ms").arg(v, 0, 'f', 1);
+  };
+  QString text = QString("compile %1   frame %2")
+                     .arg(ms(viewport_->hasScene() ? viewport_->compileMs() : -1.0),
+                          ms(frameMs_));
+  if (previewMs_ >= 0.0) text += QString("   preview %1").arg(ms(previewMs_));
+  timing_->setText(text);
 }
 
 void MainWindow::log(const QString& line) {

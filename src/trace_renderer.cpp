@@ -1,5 +1,6 @@
 #include "trace_renderer.h"
 
+#include <QElapsedTimer>
 #include <QOpenGLContext>
 
 #include <algorithm>
@@ -36,10 +37,18 @@ bool TraceRenderer::initialize() {
     return false;
   if (!initializeOpenGLFunctions()) return false;
   if (!vao_) glGenVertexArrays(1, &vao_);
+  if (freeTimers_.empty() && timersInFlight_.empty()) {
+    freeTimers_.resize(kGpuTimers);
+    glGenQueries(kGpuTimers, freeTimers_.data());
+  }
   return true;
 }
 
 bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
+  // Compile and link, timed together. Reading the link status waits for the
+  // driver to finish the link.
+  QElapsedTimer clock;
+  clock.start();
   const GLuint vs = compileStage(*this, GL_VERTEX_SHADER,
                                  fg::vertexShaderSource(false), "vertex", error);
   if (!vs) return false;
@@ -54,6 +63,7 @@ bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
   glAttachShader(p, vs);
   glAttachShader(p, fs);
   glLinkProgram(p);
+  ++linkCount_;
   glDeleteShader(vs);
   glDeleteShader(fs);
   GLint ok = 0;
@@ -65,6 +75,7 @@ bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
     glDeleteProgram(p);
     return false;
   }
+  compileMs_ = clock.nsecsElapsed() * 1e-6;
 
   if (program_) glDeleteProgram(program_);
   program_ = p;
@@ -152,6 +163,39 @@ void TraceRenderer::ensurePreviewTarget(int width, int height) {
   previewSize_ = QSize(width, height);
 }
 
+void TraceRenderer::setParameter(const fg::UniformBinding& b) {
+  if (!program_) return;
+  glUseProgram(program_);
+  setBinding(b);
+}
+
+bool TraceRenderer::beginGpuTimer() {
+  if (freeTimers_.empty()) return false;
+  const GLuint q = freeTimers_.back();
+  freeTimers_.pop_back();
+  timersInFlight_.push_back(q);
+  glBeginQuery(GL_TIME_ELAPSED, q);
+  return true;
+}
+
+void TraceRenderer::endGpuTimer() {
+  glEndQuery(GL_TIME_ELAPSED);
+}
+
+bool TraceRenderer::takeGpuTime(double* ms) {
+  if (timersInFlight_.empty()) return false;
+  const GLuint q = timersInFlight_.front();
+  GLint available = 0;
+  glGetQueryObjectiv(q, GL_QUERY_RESULT_AVAILABLE, &available);
+  if (!available) return false;
+  GLuint64 ns = 0;
+  glGetQueryObjectui64v(q, GL_QUERY_RESULT, &ns);
+  timersInFlight_.pop_front();
+  freeTimers_.push_back(q);
+  *ms = double(ns) * 1e-6;
+  return true;
+}
+
 void TraceRenderer::releasePreviewTarget() {
   if (previewRbo_) glDeleteRenderbuffers(1, &previewRbo_);
   if (previewFbo_) glDeleteFramebuffers(1, &previewFbo_);
@@ -162,6 +206,11 @@ void TraceRenderer::releasePreviewTarget() {
 void TraceRenderer::release() {
   releaseTextures();
   releasePreviewTarget();
+  for (GLuint q : timersInFlight_) freeTimers_.push_back(q);
+  timersInFlight_.clear();
+  if (!freeTimers_.empty())
+    glDeleteQueries(static_cast<GLsizei>(freeTimers_.size()), freeTimers_.data());
+  freeTimers_.clear();
   if (program_) glDeleteProgram(program_);
   if (vao_) glDeleteVertexArrays(1, &vao_);
   program_ = 0;

@@ -48,7 +48,8 @@ GraphLoad compileGraphFileText(const QByteArray& text, const QString& path) {
   try {
     GraphDirMeshResolver meshes(dir);
     out.scene = compileGraphText(text.toStdString(),
-                                 path.endsWith(".json", Qt::CaseInsensitive), meshes);
+                                 path.endsWith(".json", Qt::CaseInsensitive), meshes,
+                                 &out.nodeOps);
   } catch (const fg::GraphError& e) {
     out.pointer = QString::fromStdString(e.pointer());
     out.error = QString("field-graph error%1%2: %3")

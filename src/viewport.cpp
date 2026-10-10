@@ -34,6 +34,8 @@ Viewport::Viewport(float previewScale, QWidget* parent)
   connect(&settle_, &QTimer::timeout, this, [this] {
     if (drag_ == Drag::None && lastFramePreview_) update();
   });
+  gpuPoll_.setInterval(2);
+  connect(&gpuPoll_, &QTimer::timeout, this, &Viewport::pollGpuTimers);
 }
 
 Viewport::~Viewport() {
@@ -81,12 +83,18 @@ void Viewport::paintGL() {
   const qreal dpr = devicePixelRatioF();
   const int w = qRound(width() * dpr), h = qRound(height() * dpr);
   const bool preview = moving() && previewScale_ < 0.999f;
+  const bool timed = renderer_.beginGpuTimer();
   QSize traced(w, h);
   if (preview)
     traced = renderer_.renderPreview(defaultFramebufferObject(), w, h, previewScale_,
                                      camera_);
   else
     renderer_.render(w, h, camera_);
+  if (timed) {
+    renderer_.endGpuTimer();
+    timedFrames_.push_back({preview, traced});
+    gpuPoll_.start();
+  }
   if (timeFrames_) renderer_.finish();
   const double ms = clock.nsecsElapsed() * 1e-6;
   lastFramePreview_ = preview;
@@ -129,14 +137,48 @@ void Viewport::linkScene(dce::fieldgraph::GlslScene scene, bool frame) {
   hasScene_ = true;
   if (frame || first) {
     frameBounds(camera_, scene_.bounds);
-    cameraChanged();
+    viewChanged();
   } else {
     update();
   }
   emit sceneApplied();
 }
 
-void Viewport::cameraChanged() {
+void Viewport::setParameter(int index, std::vector<float> value) {
+  if (!hasScene_ || index < 0 || index >= int(scene_.bindings.size())) return;
+  dce::fieldgraph::UniformBinding& b = scene_.bindings[std::size_t(index)];
+  if (value.size() != b.value.size() || value == b.value) return;
+  b.value = std::move(value);
+  if (!glReady_) return;
+  makeCurrent();
+  renderer_.setParameter(b);
+  doneCurrent();
+  // dualc_field_view counts a parameter nudge as an interaction too.
+  viewChanged();
+}
+
+void Viewport::pollGpuTimers() {
+  if (!glReady_) return gpuPoll_.stop();
+  std::vector<std::pair<TimedFrame, double>> done;
+  makeCurrent();
+  double ms = 0.0;
+  while (renderer_.takeGpuTime(&ms)) {
+    done.emplace_back(timedFrames_.front(), ms);
+    timedFrames_.pop_front();
+  }
+  if (!renderer_.gpuTimersInFlight()) gpuPoll_.stop();
+  doneCurrent();
+  for (const auto& [frame, gpuMs] : done) {
+    qCDebug(lcPaint).noquote() << QString("gpu %1 %2x%3 %4 ms")
+                                      .arg(frame.preview ? "preview" : "full")
+                                      .arg(frame.traced.width())
+                                      .arg(frame.traced.height())
+                                      .arg(gpuMs, 0, 'f', 1);
+    emit gpuFrameTimed(frame.preview, frame.traced, gpuMs);
+  }
+}
+
+void Viewport::viewChanged() {
   settle_.start();
   update();
 }
@@ -163,7 +205,7 @@ void Viewport::mouseMoveEvent(QMouseEvent* event) {
     orbitBy(camera_, d.x(), d.y());
   else
     panBy(camera_, d.x(), d.y(), height());
-  cameraChanged();
+  viewChanged();
 }
 
 void Viewport::mouseReleaseEvent(QMouseEvent* event) {
@@ -179,7 +221,7 @@ void Viewport::wheelEvent(QWheelEvent* event) {
   const double steps = event->angleDelta().y() / 120.0;
   if (steps == 0.0) return QOpenGLWidget::wheelEvent(event);
   dollyBy(camera_, steps);
-  cameraChanged();
+  viewChanged();
 }
 
 void Viewport::keyPressEvent(QKeyEvent* event) {
@@ -187,7 +229,7 @@ void Viewport::keyPressEvent(QKeyEvent* event) {
   // they follow the user's layout (the owner types on Belgian AZERTY).
   if (event->text().compare("f", Qt::CaseInsensitive) == 0 && hasScene_) {
     frameBounds(camera_, scene_.bounds);
-    cameraChanged();
+    viewChanged();
     return;
   }
   QOpenGLWidget::keyPressEvent(event);
@@ -198,5 +240,7 @@ void Viewport::releaseGL() {
   makeCurrent();
   renderer_.release();
   doneCurrent();
+  gpuPoll_.stop();
+  timedFrames_.clear();
   glReady_ = false;
 }

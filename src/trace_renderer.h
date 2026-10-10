@@ -6,6 +6,7 @@
 #include <QOpenGLFunctions_3_3_Core>
 #include <QSize>
 
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -25,6 +26,14 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // bindings. On failure the previous scene stays and `*error` holds the log.
   bool setScene(const dce::fieldgraph::GlslScene& scene, std::string* error);
   bool hasScene() const { return program_ != 0; }
+  // Program links attempted so far (a parameter edit must not add one), and
+  // the wall time of the last successful compile and link, in ms.
+  int linkCount() const { return linkCount_; }
+  double compileMs() const { return compileMs_; }
+
+  // A parameter edit: upload one binding of the scene on screen to its
+  // uniform. No compile, no link.
+  void setParameter(const dce::fieldgraph::UniformBinding& b);
 
   // Draw one width x height frame into the bound framebuffer.
   void render(int width, int height, const OrbitCamera& cam);
@@ -37,6 +46,16 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
 
   // Block until the GL work issued so far has finished (frame timing).
   void finish() { glFinish(); }
+
+  // GPU frame timing with GL_TIME_ELAPSED queries, read back without a stall.
+  // beginGpuTimer starts a query (false when kGpuTimers are all in flight, and
+  // then endGpuTimer must not be called); takeGpuTime returns the oldest
+  // finished one, in ms, in the order they were begun.
+  static constexpr int kGpuTimers = 4;
+  bool beginGpuTimer();
+  void endGpuTimer();
+  bool takeGpuTime(double* ms);
+  bool gpuTimersInFlight() const { return !timersInFlight_.empty(); }
 
   // Delete the GL objects.
   void release();
@@ -57,6 +76,10 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   std::vector<GLuint> textures_;
   GLuint previewFbo_ = 0, previewRbo_ = 0;
   QSize previewSize_;
+  std::vector<GLuint> freeTimers_;      // GL_TIME_ELAPSED query objects
+  std::deque<GLuint> timersInFlight_;  // begun, result not read yet
+  int linkCount_ = 0;
+  double compileMs_ = 0.0;
   dualc::BBox bounds_;
   float stepScale_ = 1.0f;
   float featureScale_ = 0.0f;

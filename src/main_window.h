@@ -6,7 +6,12 @@
 #include <QString>
 #include <QTimer>
 
+#include <map>
+#include <string>
+
+class QLabel;
 class QPlainTextEdit;
+class ParameterPanel;
 class Viewport;
 
 // The editor window: the Viewport, File > Open, a status bar and a Log dock.
@@ -14,7 +19,9 @@ class Viewport;
 // of a .json or .fld file on the window. The open file is watched and reloads
 // when its text changes on disk, keeping the camera. A field-graph error or a
 // shader error goes to the status bar and the log, with its JSON pointer, and
-// the last good scene stays on screen (docs/command_reference/01-viewport.md).
+// the last good scene stays on screen. The Parameters dock edits the scene's
+// bindings as uniforms only, and the status bar shows the shader compile time
+// and the GPU time of the last frame (docs/command_reference/01-viewport.md).
 class MainWindow : public QMainWindow {
   Q_OBJECT
 
@@ -31,6 +38,9 @@ class MainWindow : public QMainWindow {
   void openFile(const QString& path);
 
   Viewport* viewport() const { return viewport_; }
+  ParameterPanel* parameters() const { return parameters_; }
+  // The permanent status-bar text: compile and frame times.
+  QString timingText() const;
   const QString& currentFile() const { return file_; }
   // The text of the log dock.
   QString logText() const;
@@ -53,9 +63,15 @@ class MainWindow : public QMainWindow {
   void fileEvent();
   void reportError(const QString& error);
   void log(const QString& line);
+  void showTiming();
 
   Viewport* viewport_;
   QPlainTextEdit* log_;
+  ParameterPanel* parameters_;
+  QLabel* timing_;
+  double frameMs_ = -1.0, previewMs_ = -1.0;  // last GPU times; -1 = none yet
+  // Node pointer -> op of the scene being loaded, then of the one on screen.
+  std::map<std::string, std::string> loadingOps_, nodeOps_;
   QString file_;
   QByteArray text_;  // the text last attempted, so a touch reloads nothing
   bool loading_ = false;

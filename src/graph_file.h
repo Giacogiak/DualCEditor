@@ -5,14 +5,18 @@
 #include <QByteArray>
 #include <QString>
 
+#include <map>
 #include <optional>
+#include <string>
 
 // One attempt to turn a graph file into a compiled scene. On failure `scene`
 // is empty and `error` reads like the CLI's: "field-graph error at <pointer>:
 // <message>", with `pointer` the JSON pointer DualC's GraphError carries
-// (empty when the error names no node).
+// (empty when the error names no node). `nodeOps` maps each node's pointer to
+// its op, so a binding's nodePointer can be named ("gyroid", "onion").
 struct GraphLoad {
   std::optional<dce::fieldgraph::GlslScene> scene;
+  std::map<std::string, std::string> nodeOps;
   QString error;
   QString pointer;
 };

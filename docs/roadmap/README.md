@@ -7,7 +7,10 @@ sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matche
 `dualc_field_view`. T2 is done: the orbit camera (orbit, dolly, pan, `F` to frame) and
 the adaptive preview, which settles after 180 ms and does not repaint while idle. T3 is
 done: a graph opens by `File ▸ Open`, by argument or by a drop. It reloads when saved, and
-a broken file shows its error and keeps the last image. T4 is next: the parameter dock.
+a broken file shows its error and keeps the last image. T4 is done: a Parameters dock edits
+the graph's bindings as uniforms only, with no relink, and the status bar shows the
+shader compile ms and the GPU ms of the last settled frame. T5 is next: the owner measures
+on the GTX 1050 Ti.
 
 ## Next up
 

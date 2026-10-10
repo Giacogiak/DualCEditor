@@ -82,6 +82,38 @@ This follows dualc_field_view's render loop, moved onto Qt's event-driven painti
 `viewport_test` checks this with synthetic events. The paint log is the
 `dce.viewport.paint` logging category (`docs/command_reference/01-viewport.md`).
 
+## Parameter edits and timing (P00 T4)
+
+DualC's codegen has two edit tiers. A structural change recompiles. A change to a value in
+`GlslScene::bindings` only sets a uniform. The Parameters dock is the second tier.
+
+- **The path of an edit.** `ParameterPanel` (`src/parameter_panel.{h,cpp}`) emits
+  `parameterEdited(index, value)` with the binding's whole value. `MainWindow` connects
+  it to `Viewport::setParameter`. That writes the value into the scene on screen
+  (`scene_.bindings`), makes the context current and calls `TraceRenderer::setParameter`,
+  which is `glUseProgram` plus the same `setBinding` that `setScene` uses. Then the view
+  previews and settles as for a camera move, as dualc_field_view does for its `[`/`]`
+  nudge. An edit to the value already set does nothing.
+- **What an edit does not touch.** `stepScale`, `featureScale` and the trace box are
+  computed by the codegen from the graph's values, and stay as compiled. dualc_field_view
+  does the same. So a much smaller wavelength than the file's keeps the file's step sizes.
+  An edit is not written to the file. The next `setScene` (a reload or an open) brings
+  the file's values back, and the dock is rebuilt from them on `sceneApplied`.
+- **Counting links.** `TraceRenderer::linkCount` counts `glLinkProgram` calls.
+  `parameter_dock_test` checks that edits leave it unchanged and that a changed save adds
+  one.
+- **Compile time.** `TraceRenderer::setScene` times the vertex and fragment compile and
+  the link with a `QElapsedTimer`, up to the `GL_LINK_STATUS` read, which waits for the
+  link. It is GL time only: DualC's parse and codegen are not in it.
+- **GPU frame time.** `paintGL` wraps each frame (the preview blit included) in a
+  `GL_TIME_ELAPSED` query. `TraceRenderer` owns a pool of `kGpuTimers` = 4 queries. A
+  frame painted while all 4 are in flight is not timed. The result is not read in
+  `paintGL`, because that would stall. A 2 ms `gpuPoll_` timer runs only while queries
+  are in flight. It reads the finished ones in order, without blocking, and emits
+  `gpuFrameTimed(preview, traced, ms)`. It stops when none are left, so an idle widget
+  still does nothing. The status bar shows the last full-resolution (settled) frame and
+  the last preview frame.
+
 ## Context
 
 `main` sets the default `QSurfaceFormat` to 3.3 core before any surface exists.
@@ -113,3 +145,13 @@ hidden off-screen surface.
   after release, and no `paintGL` in 1 s of idle. The frame times are in
   `HANDOFF_P00_TASK2.md`. They come from a development box, so they are not performance
   figures (E-04).
+
+## Verified (2026-10-10, P00 T4)
+
+- `parameter_dock_test` passes on nouveau and on llvmpipe. Edits of the gyroid wavelength,
+  the onion thickness and a vec3 component change the image with no link, and putting the
+  file's values back gives the original image pixel for pixel.
+- On both drivers, the GPU timer query mostly agrees with the `glFinish` wall time of the
+  paint log, within about 3 ms. Once on llvmpipe, a preview frame read 30.7 ms against a
+  51.8 ms wall time. The wall time also counts waits outside the frame. Numbers and
+  conditions are in `HANDOFF_P00_TASK4.md`.

@@ -10,7 +10,9 @@
 #include <QSize>
 #include <QTimer>
 
+#include <deque>
 #include <optional>
+#include <vector>
 
 // The 3D viewport: a GL 3.3 core QOpenGLWidget that sphere-traces a compiled
 // field graph through DualC's generated shader (TraceRenderer), on the framed
@@ -42,6 +44,17 @@ class Viewport : public QOpenGLWidget {
   bool hasScene() const { return hasScene_; }
   const dce::fieldgraph::GlslScene& scene() const { return scene_; }
 
+  // A parameter edit: set binding `index` of the scene on screen to `value`
+  // (as many floats as the binding has) and upload that one uniform. It never
+  // recompiles or relinks. The view previews and settles as for a camera move.
+  // An edit lasts until the next setScene, which brings its own values.
+  void setParameter(int index, std::vector<float> value);
+
+  // Program links attempted so far, and the GL compile + link time of the
+  // scene on screen, in ms.
+  int linkCount() const { return renderer_.linkCount(); }
+  double compileMs() const { return renderer_.compileMs(); }
+
   const OrbitCamera& camera() const { return camera_; }
   float previewScale() const { return previewScale_; }
   bool isGLReady() const { return glReady_; }
@@ -56,6 +69,10 @@ class Viewport : public QOpenGLWidget {
   // in a preview frame), `ms` the CPU time of paintGL (GPU time too when frame
   // timing is on).
   void frameDrawn(bool preview, QSize traced, double ms);
+  // The GPU time of a frame, from a GL_TIME_ELAPSED query read back after the
+  // frame (a few ms later, without a stall). Frames come in paint order. A
+  // frame painted while every query is still in flight has no GPU time.
+  void gpuFrameTimed(bool preview, QSize traced, double ms);
   void sceneApplied();
   // `error` is the shader compile or link log.
   void sceneFailed(const QString& error);
@@ -75,8 +92,11 @@ class Viewport : public QOpenGLWidget {
   void releaseGL();
   // Link `scene` on the current context and take it on success.
   void linkScene(dce::fieldgraph::GlslScene scene, bool frame);
-  // The camera changed: repaint at preview scale and restart the settle wait.
-  void cameraChanged();
+  // The view changed (camera or parameter): repaint at preview scale and
+  // restart the settle wait.
+  void viewChanged();
+  // Read back the GPU timer queries that have finished.
+  void pollGpuTimers();
   bool moving() const { return drag_ != Drag::None || settle_.isActive(); }
 
   dce::fieldgraph::GlslScene scene_;  // the scene on screen, once hasScene_
@@ -96,4 +116,10 @@ class Viewport : public QOpenGLWidget {
   Qt::MouseButton dragButton_ = Qt::NoButton;
   QPointF lastPos_;
   QTimer settle_;  // single-shot; running = inside the settle window
+  QTimer gpuPoll_;  // runs while GPU timer queries are in flight
+  struct TimedFrame {
+    bool preview;
+    QSize traced;
+  };
+  std::deque<TimedFrame> timedFrames_;  // one per query in flight, paint order
 };

@@ -87,12 +87,62 @@ the pointer is a character offset.
 | Part | Content |
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). |
-| `View` menu | `Log`: show or hide the Log dock. |
-| Status bar | The last load: `Loaded <file>: N nodes, M parameters`, or the last error. |
-| Log dock | At the bottom, five lines high, read-only. One line per load, reload and error. It can be closed, floated or moved to another side. |
+| `View` menu | `Parameters` and `Log`: show or hide each dock. |
+| Status bar, left | The last load: `Loaded <file>: N nodes, M parameters`, or the last error. |
+| Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. See *Timing* below. |
+| Parameters dock | On the right. One editor per parameter of the graph on screen. See *Parameters* below. |
+| Log dock | At the bottom, five lines high, read-only. One line per load (with its shader compile ms), reload and error. |
+
+Each dock can be closed, floated or moved to another side. With both docks open, the default
+1200×800 window leaves the viewport about 956×661.
 
 Menu shortcuts are Qt's standard key sequences, matched on the character typed, so they
 follow the keyboard layout (Belgian AZERTY included).
+
+## Parameters
+
+The Parameters dock lists DualC's binding table (`GlslScene::bindings`): every value of the
+graph that the generated shader reads from a uniform. They are grouped under their node, shown
+as its op and its pointer (`onion /root/in/0/in/1`). Each row is the parameter's name
+(`thickness`, `wavelength`, `center`, `mat`). Its tooltip gives the uniform's type and name.
+
+| Type | Editor |
+|---|---|
+| `float` | One spin box. |
+| `vec3` | Three spin boxes: x, y, z. |
+| `mat4` | A 4×4 grid, row-major, as the binding stores it. `translate`, `rotate` and `transform` nodes bind the local-from-world matrix. |
+
+Using a spin box:
+
+| Input | Effect |
+|---|---|
+| Up and down arrows, the wheel, the arrow buttons | Step the value and apply it at once. The step is a tenth of the value's magnitude (0.1 for 1.0, 0.01 for 0.3). Holding the key speeds it up. |
+| Typing | The value applies on `Enter` or when the box loses focus, not at every character. |
+| Page Up and Page Down | Ten steps. |
+
+The range is −10⁶ to 10⁶, with up to six decimals. No other bound is enforced: a zero
+wavelength or thickness gives what the shader computes.
+
+An edit only sets the uniform. The shader is not recompiled or relinked, so it shows at once.
+The view previews and settles as for a camera move. Edits are not written to the file. A
+reload of the file, or opening another one, brings back the file's values and rebuilds the
+dock. The trace step sizes stay those of the file's values: they come from the compiled graph,
+as in `dualc_field_view`. A wavelength much smaller than the file's can trace with visible
+artefacts. Save it in the file to recompute them.
+
+Keys typed into a spin box go to it, not to the viewport. Click the viewport to give it back
+the keys (`F`).
+
+## Timing
+
+| Field | Measured as |
+|---|---|
+| `compile` | Wall time of the GL compile of both shader stages plus the program link, for the scene on screen. DualC's parse and codegen are not included. It also goes to the Log at each load. |
+| `frame` | GPU time of the last full-resolution (settled) frame, from a `GL_TIME_ELAPSED` query. |
+| `preview` | GPU time of the last preview frame, with the upscale blit. |
+
+The query is read a few milliseconds after the frame, without stalling. While idle, nothing
+is measured and the values stay.
 
 ## Mouse and keys
 
@@ -122,11 +172,14 @@ One line per `paintGL`, off by default:
 
 ```bash
 QT_FORCE_STDERR_LOGGING=1 QT_LOGGING_RULES="dce.viewport.paint.debug=true" ./build/bin/DualCEditor
-# paintGL #1 preview 300x200 30.5 ms
-# paintGL #4 full 1200x800 145.2 ms
+# paintGL #1 preview 478x330 65.7 ms
+# gpu preview 478x330 65.0 ms
+# paintGL #4 full 956x661 110.4 ms
+# gpu full 956x661 107.8 ms
 ```
 
-Each line gives the frame kind, the size actually traced, and the time of the frame. While
+Each `paintGL` line gives the frame kind, the size actually traced, and the time of the frame.
+Each `gpu` line is the `GL_TIME_ELAPSED` time of the same frame, logged when the query is read. While
 the log is on, each frame ends with `glFinish`, so the time includes the GPU. Use it to
 check that an idle window prints nothing. `QT_FORCE_STDERR_LOGGING=1` is needed when stderr
 is not a terminal, because Qt otherwise sends the log to journald.

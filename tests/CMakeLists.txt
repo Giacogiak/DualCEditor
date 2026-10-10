@@ -50,3 +50,14 @@ add_test(NAME main_window
   COMMAND main_window_test $<TARGET_FILE:DualCEditor>
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
 set_tests_properties(main_window PROPERTIES SKIP_RETURN_CODE 77)
+
+# The Parameters dock: an edit of the gyroid wavelength or the onion thickness
+# changes the image and links no program; the status bar shows the compile ms
+# and the GPU ms of the last settled frame; a reload rebuilds the dock.
+add_executable(parameter_dock_test parameter_dock_test.cpp)
+target_link_libraries(parameter_dock_test PRIVATE dualceditor_core)
+dualceditor_target_options(parameter_dock_test)
+add_test(NAME parameter_dock
+  COMMAND parameter_dock_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+set_tests_properties(parameter_dock PROPERTIES SKIP_RETURN_CODE 77)
