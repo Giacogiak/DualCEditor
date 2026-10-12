@@ -17,6 +17,8 @@ Loses sharp edges and thin walls at 96³–256³, so lattices stay analytic. **T
 frame time with several mesh objects misses the target on the GTX 1050 Ti.
 
 ## E-23 — Per-object bounding-box culling in the shader
+
+**Decided (Giacomo, 2026-10-12):** trigger on any clear slope in the P01 measurement; P02 plans the culling.
 **Trigger:** frame time grows with the number of non-overlapping objects (P01's measurement).
 
 ## E-24 — Reuse of one object in several operations (DAG references)
