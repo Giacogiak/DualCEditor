@@ -24,7 +24,7 @@ uniform names, so the shader and the panel agree. Record the design in
 - Toggling an object's visibility neither recompiles nor relinks. Check by counting.
 - `docs/design/03-scene-lowering.md` is written and indexed.
 
-*Notes (2026-10-12, T1).* The plan first named `02-scene-lowering.md`; `02` was already
+*Notes (2026-10-12, T1).* The plan first named `03-scene-lowering.md`; `02` was already
 `02-graph-files.md` (P00 T3), and design pages number by birth order. The scene is one
 shader compiled once, but each object's wrapped graph is compiled by DualC on its own and
 renamed with its id, not one DualC graph: one graph loses the object of a hit (colour) and

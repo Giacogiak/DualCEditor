@@ -53,7 +53,7 @@ xvfb-run -s "-screen 0 1024x768x24" ./build/bin/DualCEditor --snapshot out.png  
 ## Several graphs (`--snapshot`, `--bench`)
 
 With more than one `graph`, `--snapshot` and `--bench` build a scene of one object per
-graph and draw it through one shader (`../design/02-scene-lowering.md`). Each object keeps
+graph and draw it through one shader (`../design/03-scene-lowering.md`). Each object keeps
 its graph's own position: the transform is the identity, so graphs that overlap in space
 overlap on screen (place them with `translate(...)` in the graph). Colours follow the order
 of the arguments: the first is DualC's grey, then orange, blue, green, yellow, purple,
