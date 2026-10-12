@@ -2,8 +2,10 @@
 
 ## Current focus
 
-**Next: P01, scene and picking (Spike B, `../../plan/20_P01_scene_and_picking.md`).** It
-waits on E-07, the picking mechanism.
+**Now: P01, scene and picking (Spike B, `../../plan/20_P01_scene_and_picking.md`).** E-07
+is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
+in its own colour, and visibility and colour are uniforms (`../design/03-scene-lowering.md`).
+`--snapshot` and `--bench` take several graphs. Next: T2, the Objects panel.
 
 Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches

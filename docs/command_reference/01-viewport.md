@@ -1,6 +1,6 @@
 # 01 — Viewport, files and launch flags
 
-`DualCEditor [options] [graph]`
+`DualCEditor [options] [graph...]`
 
 `graph` is a field graph: a `.json` document, or a `.fld` file in DualC's text shorthand
 (`difference(box(min=[-1,-1,-1],max=[1,1,1]),sphere(radius=1.25))`). A name ending in
@@ -15,7 +15,7 @@ field's own bounds padded by 5%.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `graph` (positional) | `gyroid_box.json` | The graph to open. At most one; a second exits 1. In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
+| `graph` (positional) | `gyroid_box.json` | The graph to open. The window takes one; a second exits 1. `--snapshot` and `--bench` take several: each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
 | `--snapshot PATH` | off | Render one 800×600 frame of `graph` (default view) off-screen to the PNG `PATH`, then exit. Opens no window. |
 | `--preview-scale S` | `0.5` | Resolution factor while the view moves. The view is traced at `S` × the window's pixels, then upscaled linearly. It returns to full resolution 0.18 s after the last input. Clamped to 0.1 – 1. `1` turns the preview off. A value that is not a number exits 1. Same flag and default as `dualc_field_view`. |
 | `--bench` | off | Time `graph` while orbiting and when settled, print one JSON line on stdout, and exit. See *Measurement run*. Vsync is off for the run. |
@@ -45,8 +45,28 @@ so the result is exit 77.
 ./build/bin/DualCEditor --preview-scale 0.25              # coarser, faster preview while moving
 ./build/bin/DualCEditor --snapshot out.png                # one frame, hardware GL
 ./build/bin/DualCEditor --snapshot out.png part.json      # one frame of part.json
+./build/bin/DualCEditor --snapshot out.png a.fld b.fld c.fld   # a scene of three objects
 LIBGL_ALWAYS_SOFTWARE=1 ./build/bin/DualCEditor --snapshot out.png   # Mesa llvmpipe
 xvfb-run -s "-screen 0 1024x768x24" ./build/bin/DualCEditor --snapshot out.png  # no display (not yet run: xvfb is not installed on the dev box)
+```
+
+## Several graphs (`--snapshot`, `--bench`)
+
+With more than one `graph`, `--snapshot` and `--bench` build a scene of one object per
+graph and draw it through one shader (`../design/02-scene-lowering.md`). Each object keeps
+its graph's own position: the transform is the identity, so graphs that overlap in space
+overlap on screen (place them with `translate(...)` in the graph). Colours follow the order
+of the arguments: the first is DualC's grey, then orange, blue, green, yellow, purple,
+teal, pink, and round again. Every object is visible. The view is framed on the union of
+the objects' trace boxes. A graph that does not read, parse or compile exits 2, and the
+message names the object (`object 2 (b.fld): …`). In the `--bench` JSON, `graph` is the
+paths joined by spaces.
+
+```bash
+printf 'translate(by=[-2,0,0],sphere(radius=0.8))' > a.fld
+printf 'box(min=[-0.6,-0.6,-0.6],max=[0.6,0.6,0.6])' > b.fld
+printf 'translate(by=[2,0,0],sphere(radius=0.8))' > c.fld
+./build/bin/DualCEditor --snapshot three.png a.fld b.fld c.fld   # grey, orange, blue
 ```
 
 ## Opening a graph

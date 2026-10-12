@@ -2,9 +2,11 @@
 #include "bench.h"
 #include "graph_file.h"
 #include "main_window.h"
+#include "scene.h"
 #include "snapshot.h"
 
 #include <QApplication>
+#include <QFileInfo>
 #include <QCommandLineParser>
 #include <QGuiApplication>
 #include <QStringList>
@@ -27,6 +29,27 @@ bool hasFlag(int argc, char* argv[], const char* flag) {
     if (std::strncmp(argv[i], flag, n) == 0 && (argv[i][n] == '\0' || argv[i][n] == '='))
       return true;
   return false;
+}
+
+// The graphs as a scene of one object each, lowered to one shader. On an
+// error it prints the reason and returns false.
+bool lowerGraphs(const QStringList& paths, dce::fieldgraph::GlslScene* out) {
+  Scene scene;
+  for (const QString& path : paths) {
+    GraphParse parse = parseGraphFile(path);
+    if (!parse.graph) {
+      std::fprintf(stderr, "DualCEditor: %s\n", qPrintable(parse.error));
+      return false;
+    }
+    scene.add(QFileInfo(path).fileName(), std::move(*parse.graph), graphMeshDir(path));
+  }
+  try {
+    *out = lowerScene(scene).scene;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "DualCEditor: field-graph error: %s\n", e.what());
+    return false;
+  }
+  return true;
 }
 
 }  // namespace
@@ -86,12 +109,15 @@ int main(int argc, char* argv[]) {
       "bench-frames", "Frames timed per --bench phase. Default 60.", "N", "60");
   parser.addOption(benchFramesOption);
   parser.addPositionalArgument(
-      "graph", "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json.",
-      "[graph]");
+      "graph",
+      "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json. "
+      "--snapshot and --bench take several: a scene of one object per graph.",
+      "[graph...]");
   parser.process(*app);
-  if (parser.positionalArguments().size() > 1) {
-    std::fprintf(stderr, "DualCEditor: one graph at most, got %d\n",
-                 int(parser.positionalArguments().size()));
+  const QStringList graphs = parser.positionalArguments();
+  if (graphs.size() > 1 && !parser.isSet(snapshotOption) && !parser.isSet(benchOption)) {
+    std::fprintf(stderr, "DualCEditor: the window opens one graph at most, got %d\n",
+                 int(graphs.size()));
     return 1;
   }
   const QString graph = parser.positionalArguments().isEmpty()
@@ -106,6 +132,11 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
+  if (parser.isSet(snapshotOption) && graphs.size() > 1) {
+    dce::fieldgraph::GlslScene scene;
+    if (!lowerGraphs(graphs, &scene)) return 2;
+    return renderSnapshot(scene, parser.value(snapshotOption), 800, 600);
+  }
   if (parser.isSet(snapshotOption)) {
     GraphLoad load = loadGraphFile(graph);
     if (!load.scene) {
@@ -117,7 +148,7 @@ int main(int argc, char* argv[]) {
 
   if (parser.isSet(benchOption)) {
     BenchOptions bench;
-    bench.graph = graph;
+    bench.graph = graphs.size() > 1 ? graphs.join(' ') : graph;
     bench.previewScale = previewScale;
     const QStringList wh = parser.value(benchSizeOption).split('x');
     bool wOk = false, hOk = false, nOk = false;
@@ -127,6 +158,11 @@ int main(int argc, char* argv[]) {
         bench.frames < 1) {
       std::fprintf(stderr, "DualCEditor: --bench-size needs WxH and --bench-frames N >= 1\n");
       return 1;
+    }
+    if (graphs.size() > 1) {
+      dce::fieldgraph::GlslScene scene;
+      if (!lowerGraphs(graphs, &scene)) return 2;
+      return runBench(std::move(scene), bench);
     }
     GraphLoad load = loadGraphFile(graph);
     if (!load.scene) {

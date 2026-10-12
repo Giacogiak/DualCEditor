@@ -17,12 +17,18 @@ The scene is lowered to a single graph, a union of each object wrapped in `trans
 compiled once. Visibility and colour are uniforms, not graph edits: a hidden object is
 skipped, and showing it again does not recompile. Put the object id in each object's
 uniform names, so the shader and the panel agree. Record the design in
-`docs/design/02-scene-lowering.md`.
+`docs/design/03-scene-lowering.md`.
 
 #### Acceptance criteria
 - A scene of 3 objects renders, each in its own colour.
 - Toggling an object's visibility neither recompiles nor relinks. Check by counting.
-- `docs/design/02-scene-lowering.md` is written and indexed.
+- `docs/design/03-scene-lowering.md` is written and indexed.
+
+*Notes (2026-10-12, T1).* The plan first named `02-scene-lowering.md`; `02` was already
+`02-graph-files.md` (P00 T3), and design pages number by birth order. The scene is one
+shader compiled once, but each object's wrapped graph is compiled by DualC on its own and
+renamed with its id, not one DualC graph: one graph loses the object of a hit (colour) and
+DualC dedups equal objects into shared uniforms (`03-scene-lowering.md` § Why).
 
 ### T2. Objects panel
 

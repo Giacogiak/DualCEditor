@@ -72,3 +72,21 @@ set_tests_properties(bench PROPERTIES
   SKIP_RETURN_CODE 77
   PASS_REGULAR_EXPRESSION
   "\"moving\":{\"gpuFrames\":[1-9][0-9]*,\"gpuMs\":[0-9.]+,\"traced\":\\[80,50\\].*\"settled\":{\"gpuFrames\":[1-9][0-9]*,\"gpuMs\":[0-9.]+,\"traced\":\\[160,100\\]")
+
+# The scene lowering, GL-free: ids in every function and uniform name, the
+# object uniforms and their values, the union trace box, the colour patch.
+add_executable(scene_test scene_test.cpp)
+target_link_libraries(scene_test PRIVATE dualceditor_core)
+dualceditor_target_options(scene_test)
+add_test(NAME scene COMMAND scene_test)
+
+# A lowered scene on GL, off-screen: one object renders the graph's own image,
+# three objects render in their own colours, and hiding, showing and
+# recolouring compile and link nothing.
+add_executable(scene_render_test scene_render_test.cpp)
+target_link_libraries(scene_render_test PRIVATE dualceditor_core)
+dualceditor_target_options(scene_render_test)
+add_test(NAME scene_render
+  COMMAND scene_render_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+set_tests_properties(scene_render PROPERTIES SKIP_RETURN_CODE 77)

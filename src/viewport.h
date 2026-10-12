@@ -50,9 +50,10 @@ class Viewport : public QOpenGLWidget {
   // An edit lasts until the next setScene, which brings its own values.
   void setParameter(int index, std::vector<float> value);
 
-  // Program links attempted so far, and the GL compile + link time of the
-  // scene on screen, in ms.
+  // Program links and shader compiles attempted so far, and the GL compile +
+  // link time of the scene on screen, in ms.
   int linkCount() const { return renderer_.linkCount(); }
+  int compileCount() const { return renderer_.compileCount(); }
   double compileMs() const { return renderer_.compileMs(); }
 
   // A scripted orbit, as a left-drag of (dx, dy) pixels would make it: the

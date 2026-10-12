@@ -22,13 +22,16 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // an OpenGL 3.3 core context.
   bool initialize();
 
-  // Link the trace program for `scene`, upload its mesh grids and set its
+  // Link the trace program for `scene` (assembleSceneShader: a lowered scene
+  // gets its per-object colour), upload its mesh grids and set its
   // bindings. On failure the previous scene stays and `*error` holds the log.
   bool setScene(const dce::fieldgraph::GlslScene& scene, std::string* error);
   bool hasScene() const { return program_ != 0; }
   // Program links attempted so far (a parameter edit must not add one), and
   // the wall time of the last successful compile and link, in ms.
   int linkCount() const { return linkCount_; }
+  // Shader compiles attempted so far (vertex and fragment: two per setScene).
+  int compileCount() const { return compileCount_; }
   double compileMs() const { return compileMs_; }
 
   // A parameter edit: upload one binding of the scene on screen to its
@@ -79,6 +82,7 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   std::vector<GLuint> freeTimers_;      // GL_TIME_ELAPSED query objects
   std::deque<GLuint> timersInFlight_;  // begun, result not read yet
   int linkCount_ = 0;
+  int compileCount_ = 0;
   double compileMs_ = 0.0;
   dualc::BBox bounds_;
   float stepScale_ = 1.0f;

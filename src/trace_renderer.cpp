@@ -1,10 +1,13 @@
 #include "trace_renderer.h"
 
+#include "scene.h"
+
 #include <QElapsedTimer>
 #include <QOpenGLContext>
 
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 
 namespace fg = dce::fieldgraph;
 using dualc::Vector3;
@@ -47,14 +50,21 @@ bool TraceRenderer::initialize() {
 bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
   // Compile and link, timed together. Reading the link status waits for the
   // driver to finish the link.
+  std::string fragment;
+  try {
+    fragment = assembleSceneShader(scene);
+  } catch (const std::runtime_error& e) {
+    *error = e.what();
+    return false;
+  }
   QElapsedTimer clock;
   clock.start();
+  ++compileCount_;
   const GLuint vs = compileStage(*this, GL_VERTEX_SHADER,
                                  fg::vertexShaderSource(false), "vertex", error);
   if (!vs) return false;
-  const GLuint fs = compileStage(*this, GL_FRAGMENT_SHADER,
-                                 fg::assembleTraceShader(scene, false), "fragment",
-                                 error);
+  ++compileCount_;
+  const GLuint fs = compileStage(*this, GL_FRAGMENT_SHADER, fragment, "fragment", error);
   if (!fs) {
     glDeleteShader(vs);
     return false;

@@ -12,29 +12,19 @@
 
 namespace fg = dce::fieldgraph;
 
-namespace {
-
-// FileMeshResolver with relative paths tried against the graph's folder first,
-// so a dropped graph finds the meshes that sit beside it.
-class GraphDirMeshResolver : public fg::MeshResolver {
- public:
-  explicit GraphDirMeshResolver(QString dir) : dir_(std::move(dir)) {}
-
-  fg::MeshHandle resolve(const std::string& path) override {
-    const QString p = QString::fromStdString(path);
-    if (!dir_.isEmpty() && QDir::isRelativePath(p)) {
-      const QString beside = QDir(dir_).filePath(p);
-      if (QFileInfo::exists(beside)) return files_.resolve(beside.toStdString());
-    }
-    return files_.resolve(path);
+fg::MeshHandle GraphDirMeshResolver::resolve(const std::string& path) {
+  const QString p = QString::fromStdString(path);
+  if (!dir_.isEmpty() && QDir::isRelativePath(p)) {
+    const QString beside = QDir(dir_).filePath(p);
+    if (QFileInfo::exists(beside)) return files_.resolve(beside.toStdString());
   }
+  return files_.resolve(path);
+}
 
- private:
-  QString dir_;
-  fg::FileMeshResolver files_;
-};
-
-}  // namespace
+QString graphMeshDir(const QString& path) {
+  // A Qt resource has no folder on disk to resolve meshes against.
+  return path.startsWith(':') ? QString() : QFileInfo(path).absolutePath();
+}
 
 bool isGraphFileName(const QString& path) {
   return path.endsWith(".json", Qt::CaseInsensitive) ||
@@ -43,10 +33,8 @@ bool isGraphFileName(const QString& path) {
 
 GraphLoad compileGraphFileText(const QByteArray& text, const QString& path) {
   GraphLoad out;
-  // A Qt resource has no folder on disk to resolve meshes against.
-  const QString dir = path.startsWith(':') ? QString() : QFileInfo(path).absolutePath();
   try {
-    GraphDirMeshResolver meshes(dir);
+    GraphDirMeshResolver meshes(graphMeshDir(path));
     out.scene = compileGraphText(text.toStdString(),
                                  path.endsWith(".json", Qt::CaseInsensitive), meshes,
                                  &out.nodeOps);
@@ -69,4 +57,24 @@ GraphLoad loadGraphFile(const QString& path) {
     return out;
   }
   return compileGraphFileText(file.readAll(), path);
+}
+
+GraphParse parseGraphFile(const QString& path) {
+  GraphParse out;
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    out.error = QString("cannot read %1: %2").arg(path, file.errorString());
+    return out;
+  }
+  try {
+    out.graph = parseGraphText(file.readAll().toStdString(),
+                               path.endsWith(".json", Qt::CaseInsensitive));
+  } catch (const fg::GraphError& e) {
+    out.error = QString("field-graph error%1%2: %3")
+                    .arg(e.pointer().empty() ? "" : " at ",
+                         QString::fromStdString(e.pointer()), QString::fromUtf8(e.what()));
+  } catch (const std::exception& e) {
+    out.error = QString("field-graph error: %1").arg(QString::fromUtf8(e.what()));
+  }
+  return out;
 }

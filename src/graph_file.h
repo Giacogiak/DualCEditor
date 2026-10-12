@@ -1,6 +1,7 @@
 #pragma once
 
 #include "field_glsl.h"
+#include "field_graph.h"
 
 #include <QByteArray>
 #include <QString>
@@ -8,6 +9,24 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <utility>
+
+// DualC's FileMeshResolver with relative paths tried against `dir` first, so
+// a graph finds the meshes that sit beside it. An empty `dir` resolves against
+// the working directory only.
+class GraphDirMeshResolver : public dce::fieldgraph::MeshResolver {
+ public:
+  explicit GraphDirMeshResolver(QString dir) : dir_(std::move(dir)) {}
+  dce::fieldgraph::MeshHandle resolve(const std::string& path) override;
+
+ private:
+  QString dir_;
+  dce::fieldgraph::FileMeshResolver files_;
+};
+
+// The folder a graph read from `path` resolves its mesh paths against: the
+// file's own folder, or none for a Qt resource.
+QString graphMeshDir(const QString& path);
 
 // One attempt to turn a graph file into a compiled scene. On failure `scene`
 // is empty and `error` reads like the CLI's: "field-graph error at <pointer>:
@@ -29,6 +48,14 @@ GraphLoad compileGraphFileText(const QByteArray& text, const QString& path);
 
 // Read `path` (a file or a Qt resource) and compile it.
 GraphLoad loadGraphFile(const QString& path);
+
+// A graph file read and parsed, not compiled: what a scene object holds. On
+// failure `graph` is empty and `error` reads as GraphLoad's does.
+struct GraphParse {
+  std::optional<dce::fieldgraph::GraphNode> graph;
+  QString error;
+};
+GraphParse parseGraphFile(const QString& path);
 
 // The suffixes File > Open and drag and drop accept, lower case.
 bool isGraphFileName(const QString& path);
