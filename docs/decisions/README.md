@@ -15,7 +15,7 @@ This table is authoritative; `/plan-run` reads it before unlocking a phase.
 
 | Decision | Blocks | Status |
 |---|---|---|
-| E-07 Picking mechanism | P01 | open |
+| E-07 Picking mechanism | P01 | decided: CPU pick (2026-10-12) |
 | E-08 Scene file format | P03 | open |
 | E-09 Mesh import formats and readers | P04 | open |
 | E-10 Smooth booleans on non-metric inputs | P05 | open |

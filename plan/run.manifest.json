@@ -31,13 +31,11 @@
 			"noPush": true
 		},
 		"stopUnits": [
-			"P01",
 			"P03",
 			"P04",
 			"P05"
 		],
 		"stopUnitsWhy": {
-			"P01": "waits on E-07 (picking mechanism), docs/decisions/02-open.md",
 			"P03": "waits on E-08 (scene file format), docs/decisions/02-open.md",
 			"P04": "waits on E-09 (mesh import formats), docs/decisions/02-open.md",
 			"P05": "waits on E-10 (smooth booleans on non-metric inputs), docs/decisions/02-open.md"

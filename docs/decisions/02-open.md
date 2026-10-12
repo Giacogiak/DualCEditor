@@ -5,6 +5,8 @@ Each one blocks the phase named in `README.md`'s table. When the owner answers, 
 
 ## E-07 — Picking mechanism
 
+**Decided (Giacomo, 2026-10-12):** CPU pick (the plan's recommendation).
+
 A click must select the object under the cursor. Today's generated `sceneSDF` returns a
 distance only (DualC `examples/field_glsl.cpp`).
 
