@@ -7,12 +7,12 @@ OS and driver, window size, and how the number was taken: GPU timer query, or wa
 |---|---|---|---|---|---|---|---|---|
 | 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 0.35 | 0.8 GPU / 3.8 wall (448×280) | 2.7 GPU / 5.3 wall | 27.7 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 0.5 | 1.1 GPU / 3.8 wall (640×400) | 2.6 GPU / 4.2 wall | 26.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
-| 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 1 | 3.4 GPU / wall garbled in the report, to re-ask | garbled in the report, to re-ask | 19.6 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | gyroid_box.json | 1280×800 | 1 | 3.4 GPU / 4.8 wall (1280×800) | 2.6 GPU / 4.1 wall | 19.6 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 0.35 | 80.6 GPU / 83.3 wall (448×280) | 385.3 GPU / 389.5 wall | 19.0 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 0.5 | 127.6 GPU / 128.6 wall (640×400) | 375.7 GPU / 372.2 wall | 30.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
-| 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 1 | 402.0 GPU / 395.7 wall (1280×800), to confirm* | 389.8 GPU / 360.9 wall, to confirm* | 26.7 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | tapered octet (P12) | 1280×800 | 1 | 402.0 GPU / 395.7 wall (1280×800) | 389.8 GPU / 360.9 wall | 26.7 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.35 | 1.9 GPU / 3.9 wall (448×280) | 7.3 GPU / 8.2 wall | 22.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
-| 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.5 | 2.7 GPU / wall garbled in the report, to re-ask | garbled in the report, to re-ask | 23.4 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.5 | 2.7 GPU / 3.8 wall (640×400) | 7.3 GPU / 8.3 wall | 23.4 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 1 | 8.0 GPU / 8.9 wall (1280×800) | 7.3 GPU / 8.3 wall | 21.2 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 
 P00.5 conditions: `scripts/measure_viewport.py --field-view …` at commit 53c6cb6, Windows 10,
@@ -22,9 +22,11 @@ size. Each cell is the median of 60 frames: *GPU* is the `GL_TIME_ELAPSED` query
 time between presented frames, vsync off. The moving cell gives the preview size traced.
 Compile ms are with the driver's shader cache warm (second run). In the owner's first run,
 one value each read 945.4 ms (mesh_lattice 0.35) and 327.1 ms (tapered octet 0.35), and all
-the others 14–31 ms: the cold compiles. Cells marked *garbled* did not survive the copy from
-the laptop. \*The report flags the tapered octet 1.0 row as garbled too, though every cell
-reads; its settled wall (360.9) under its GPU (389.8) is suspect.
+the others 14–31 ms: the cold compiles. The raw JSON of both runs (9 + 9 lines, run 1
+first) is in `02-measurements-p00.jsonl`. Three rows of the pasted report were garbled; they
+were re-read from that file. On the heavy scene the median wall time can fall below the
+median GPU time (tapered octet 1.0 settled: 360.9 against 389.8 ms). The two are medians of
+different samples: up to 13 of the 60 GPU times are lost while every query is in flight.
 
 ## Against dualc_field_view (P00 T5)
 

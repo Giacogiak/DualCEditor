@@ -35,4 +35,4 @@ __pycache__/
 
 # plan-run state
 .plan-run/
-measurements-*.jsonl
+measurements-*.json*

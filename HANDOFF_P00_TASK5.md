@@ -1,12 +1,12 @@
 # Handoff — P00 T5: measure on the GTX 1050 Ti (human check)
 
-Date: 2026-10-10. Plan: `plan/10_P00_viewport.md` § T5. DualC pin: `2fcb6ee` (unchanged).
+Date: 2026-10-10, closed 2026-10-12. Plan: `plan/10_P00_viewport.md` § T5. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: the owner has measured on the laptop. Three garbled rows are blocked on the
-owner.** The owner ran the checklist on the GTX 1050 Ti (Windows 10, driver 441.93, commit
-53c6cb6). The results are in `docs/roadmap/02-measurements.md`. In two of the nine rows,
-cells did not survive the copy from the laptop. The report also flags a third row (tapered
-octet 1.0) as garbled. Their raw JSON lines are asked for again, rather than guessed.
+**Status: done.** The owner ran the checklist on the GTX 1050 Ti (Windows 10, driver
+441.93, commit 53c6cb6). All nine rows are in `docs/roadmap/02-measurements.md`. Three rows
+of the pasted report were garbled. Their cells were taken from the owner's raw JSON lines,
+sent on 2026-10-12, not guessed. The raw file of both runs is committed as
+`docs/roadmap/02-measurements-p00.jsonl`.
 
 ## What changed and why
 
@@ -79,9 +79,11 @@ the laptop. Display scaling 100%, mains power, Balanced plan. The tables are in
   tapered octet 376–390 / 361–390. Moving at 0.35: gyroid 0.8 / 3.8, mesh_lattice
   1.9 / 3.9, octet 80.6 / 83.3. Compile 19–30 ms with a warm shader cache. The cold
   compiles of the first run were 945.4 ms (mesh_lattice) and 327.1 ms (octet).
-- Garbled cells: gyroid 1.0, moving wall and settled; mesh_lattice 0.5, moving wall and
-  settled. The tapered octet 1.0 row is flagged too, and its settled wall (360.9) under its
-  GPU (389.8) is suspect.
+- Garbled in the pasted report, then re-read from the raw JSON: gyroid 1.0 (moving
+  3.36 GPU / 4.84 wall, settled 2.59 / 4.08), mesh_lattice 0.5 (moving 2.74 / 3.80,
+  settled 7.33 / 8.25), and tapered octet 1.0, confirmed as pasted (moving 402.01 / 395.74,
+  settled 389.76 / 360.88). The octet's settled wall median is under its GPU median
+  because the two are medians of different samples: 52 GPU times, 60 wall times.
 - Live window: gyroid and mesh_lattice are immediate. The tapered octet lags, mostly at
   the start of a drag. No coloured squares on any scene, so T2's artefact is a nouveau and
   Quadro matter.
@@ -124,22 +126,21 @@ the laptop. Display scaling 100%, mains power, Balanced plan. The tables are in
 
 ## Exit criteria of P00
 
-- **T1–T4 met**: yes, see `HANDOFF_P00_TASK1.md` to `HANDOFF_P00_TASK4.md`. The owner
+- **T1 to T4 met**: yes, see `HANDOFF_P00_TASK1.md` to `HANDOFF_P00_TASK4.md`. The owner
   checked T2's camera live.
-- **T5 met**: **not quite.** The match with dualc_field_view is stated above. The
-  measurements table has all nine rows, but two of them lack the moving wall and settled
-  cells (gyroid 1.0 and mesh_lattice 0.5), which were garbled in the report. The tapered
-  octet 1.0 row needs confirming. The owner is asked for the three raw JSON lines from
-  `measurements-2026-10-10.jsonl`.
+- **T5 met**: yes.
+  - `docs/roadmap/02-measurements.md` has one row per scene and scale: 3 × 3, each with
+    the moving and settled ms (GPU query and wall), the compile ms, and the commit, OS and
+    driver. The conditions are under the table.
+  - Whether the viewport matches `dualc_field_view` is stated above: the image does; the
+    frame time is within about 10% on the like-for-like rows, with a +0.6 to +1.2 ms
+    per-frame cost on light scenes at 1.0.
 - **`python scripts/check.py` green**: yes, 8/8 ctests on the development box. On the
   laptop, ctest 8/8 passed.
-- **`docs/roadmap/README.md` § Current focus names P01**: **not yet.** It names the
-  three missing rows as the last step of P00.
+- **`docs/roadmap/README.md` § Current focus names P01**: yes.
 
 ## Open
 
-- **The garbled cells** (above). With the JSON lines, fill the cells, drop the *garbled*
-  and *to confirm* marks, and switch the current focus to P01.
 - **The status bar's settled `frame` reads 7–12× high on light scenes** in the live window
   (30 against 2.6 ms for the gyroid), while the preview agrees. The owner's hypothesis is
   that the GPU drops its clocks once the drag ends, before the one settled frame. It is not
@@ -157,7 +158,8 @@ the laptop. Display scaling 100%, mains power, Balanced plan. The tables are in
 
 ## For the next unit
 
-- P00.5 resumes only to fill the three rows and switch the current focus to P01.
+- P00 is closed. P01 waits on E-07 (picking mechanism), which is a stop unit in the
+  manifest.
 - P01 T4 (frame time against object count) can reuse `--bench` and
   `scripts/measure_viewport.py`. Compare `moving.wallMs` only with a viewer's drag frame
   time, and fix both window sizes.
