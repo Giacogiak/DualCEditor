@@ -76,6 +76,12 @@ Scenes:
 - The handoff states the growth per added object, and whether E-23 (bounding-box culling)
   should be triggered.
 
+*Notes (2026-10-12, T4).* `scripts/measure_viewport.py --objects` writes and times the six
+scenes (primitives in a fixed 5×2 grid, TPMS-in-box 5 apart, none overlapping) at 0.35 and
+1.0, and prints the ms per added object. The scenes and the checklist are in
+`docs/roadmap/02-measurements.md` § Against object count. The owner's numbers are pending
+(`HANDOFF_P01_TASK4.md`).
+
 ## Exit criteria
 - Tasks T1 to T4 are met. `python scripts/check.py` is green.
 - `docs/roadmap/README.md` names P02.

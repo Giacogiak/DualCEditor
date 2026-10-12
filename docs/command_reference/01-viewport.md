@@ -251,8 +251,9 @@ It prints one JSON object, then exits 0:
 
 Exit 1 when the shader does not link or a phase takes over 60 s, 2 when the graph does not
 load, 77 with no GL 3.3 core context (on Linux with no display, as for `--snapshot`).
-`scripts/measure_viewport.py` runs it over the P00 reference scenes. Its checklist is in
-`docs/roadmap/02-measurements.md`.
+`scripts/measure_viewport.py` runs it over the P00 reference scenes, and with `--objects`
+over P01's scenes of 1 to 10 objects (it then also prints the ms per added object). Its
+checklists are in `docs/roadmap/02-measurements.md`.
 
 ```bash
 ./build/bin/DualCEditor --bench --preview-scale 0.35 part.json

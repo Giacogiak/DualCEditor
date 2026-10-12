@@ -154,3 +154,48 @@ display's refresh.
    - Do the *blue-red-green squares* the owner saw on the Quadro during a drag (P00 T2,
      on the silhouette while previewing) show on the GTX?
    - Do the status bar's `frame` and `preview` agree with the script's GPU numbers?
+
+## Against object count (P01 T4)
+
+**Pending: the owner's run on the GTX 1050 Ti.** The rows go in the first table above, with
+unit `P01.4`, and the growth lines in the table below.
+
+Scenes, written by `scripts/measure_viewport.py --objects`, one graph file per object, so
+each is one object of a scene lowered to one shader (`../design/03-scene-lowering.md`):
+- **1, 3, 5 and 10 primitives.** A fixed 5×2 grid of slots 1.2 apart in x and y,
+  alternately a sphere of radius 0.4 and a box of side 0.8. No two overlap. The view frames
+  the union, so the objects cover about the same share of the screen whatever their count.
+- **1 and 3 TPMS-in-box.** `intersection(box(min=[-2,-2,-2],max=[2,2,2]),onion(normalize(gyroid(wavelength=1)),thickness=0.3))`
+  (`gyroid_box.json` without its spherical hole), translated 5 apart along x. No two
+  overlap.
+
+Each at preview scales 0.35 and 1.0, traced at 1280×800, 60 frames per phase, nothing
+selected. *Per added object* is the least-squares slope of the median ms against the object
+count, over the counts of one family.
+
+| Date | Family | Preview scale | Per added object, moving GPU / wall ms | Per added object, settled GPU / wall ms | Commit, OS, driver |
+|---|---|---|---|---|---|
+
+Development box only, to check the tooling, not a performance figure (E-04): llvmpipe
+(Mesa 26.0.8, LLVM 21.1.8), 160×100, 4 frames, commit 2c9de42 plus the script change.
+Settled GPU ms: primitives 1.8 / 4.3 / 4.0 / 15.3 for 1 / 3 / 5 / 10, TPMS-in-box 22.4 / 61.5
+for 1 / 3. Per added object at 1.0, settled GPU: primitives +1.57 ms, TPMS-in-box +20.2 ms.
+
+### How to measure (P01 T4 checklist)
+
+Same set-up as the P00 T5 checklist above, steps 1 and 2: a Release build at the commit to
+measure, mains power, other GPU work closed, the renderer checked.
+
+1. From the repository root:
+   - Linux PRIME: `python scripts/measure_viewport.py --objects --prime`
+   - Windows: `python scripts/measure_viewport.py --objects`
+     (add `--exe build\bin\DualCEditor.exe` if the binary is elsewhere)
+
+   Twelve runs: six scenes at 0.35 and 1.0. The script prints the `GPU: …` line, twelve
+   rows for the first table and four *per added object* lines. It appends the raw JSON to
+   `measurements-<date>.jsonl` in the working directory.
+2. Paste back the `GPU: …` line, the twelve rows, the four growth lines and the raw JSON
+   lines, and say whether the build was the one at the printed commit.
+3. Optional, in the live window: add `--keep`, and the script prints the folder that holds
+   the scene files. Open the ten primitives, `DualCEditor primitive_*.fld` in that folder,
+   and orbit at `--preview-scale 0.35` and `1.0`. Do ten objects feel as responsive as one?

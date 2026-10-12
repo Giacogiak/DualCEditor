@@ -8,8 +8,9 @@ in its own colour, and visibility and colour are uniforms (`../design/03-scene-l
 `--snapshot` and `--bench` take several graphs. T2 is done: the window holds a scene, a
 drop adds an object, and the Objects dock shows, hides, selects and deletes objects. T3 is
 done: a click in the viewport selects the nearest object along the ray (a CPU pick), and the
-selection is highlighted in the viewport and the dock. Next: T4, the owner's frame-time
-measurements against object count.
+selection is highlighted in the viewport and the dock. T4 is waiting on the owner: `scripts/measure_viewport.py --objects`
+times scenes of 1 to 10 objects on the GTX 1050 Ti (`02-measurements.md` § Against object
+count). Its growth per added object says whether E-23 (bounding-box culling) is triggered.
 
 Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches

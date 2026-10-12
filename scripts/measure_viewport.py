@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""P00 T5: time the viewport on the three reference scenes, ready for the table
+"""P00 T5 and P01 T4: time the viewport on reference scenes, ready for the tables
 in docs/roadmap/02-measurements.md. The owner runs it on the GTX 1050 Ti laptop.
 
   python scripts/measure_viewport.py                    # Windows, or Linux on its default GPU
   python scripts/measure_viewport.py --prime            # Linux PRIME: offload to the NVIDIA GPU
   python scripts/measure_viewport.py --field-view PATH  # also diff snapshots against dualc_field_view
+  python scripts/measure_viewport.py --objects          # P01 T4: frame time against object count
 
-Each scene runs at preview scales 0.35, 0.5 and 1.0 through `DualCEditor --bench`
-(docs/command_reference/01-viewport.md). The script prints one markdown row per run and
-writes the raw JSON lines to measurements-<date>.jsonl in the working directory.
+Without --objects, each P00 scene runs at preview scales 0.35, 0.5 and 1.0. With
+--objects, scenes of 1, 3, 5 and 10 analytic primitives and of 1 and 3 TPMS-in-box objects
+run at 0.35 and 1.0, and the script also prints the growth per added object. Every run goes
+through `DualCEditor --bench` (docs/command_reference/01-viewport.md). The script prints
+one markdown row per run and appends the raw JSON lines to measurements-<date>.jsonl in the
+working directory.
 """
 from __future__ import annotations
 
@@ -36,6 +40,15 @@ CUBE_OBJ = ("v -0.5 -0.5 -0.5\nv 0.5 -0.5 -0.5\nv -0.5 0.5 -0.5\nv 0.5 0.5 -0.5\
             "v -0.5 -0.5 0.5\nv 0.5 -0.5 0.5\nv -0.5 0.5 0.5\nv 0.5 0.5 0.5\n"
             "f 1 3 4\nf 1 4 2\nf 5 6 8\nf 5 8 7\nf 1 2 6\nf 1 6 5\n"
             "f 3 7 8\nf 3 8 4\nf 1 5 7\nf 1 7 3\nf 2 4 8\nf 2 8 6\n")
+# P01 T4. Primitives sit in a fixed 5x2 grid of slots, 1.2 apart, alternately a sphere of
+# radius 0.4 and a box of side 0.8, so no two overlap. The view frames the union, so the
+# objects cover about the same share of the screen whatever their count.
+PRIMITIVE_COUNTS = (1, 3, 5, 10)
+TPMS_COUNTS = (1, 3)
+OBJECT_SCALES = (0.35, 1.0)
+# gyroid_box.json without its spherical hole; copies sit 5 apart along x.
+TPMS_IN_BOX = ("intersection(box(min=[-2,-2,-2],max=[2,2,2]),"
+               "onion(normalize(gyroid(wavelength=1)),thickness=0.3))")
 PRIME_ENV = {"__NV_PRIME_RENDER_OFFLOAD": "1", "__GLX_VENDOR_LIBRARY_NAME": "nvidia"}
 
 
@@ -58,6 +71,49 @@ def scenes(samples: Path, work: Path) -> list[tuple[str, Path]]:
             ("mesh_lattice.json", lattice)]
 
 
+def primitive(i: int) -> str:
+    x, y = 1.2 * (i % 5 - 2), 1.2 * (0.5 - i // 5)
+    if i % 2 == 0:
+        return f"sphere(center=[{x:g},{y:g},0],radius=0.4)\n"
+    lo = ",".join(f"{v - 0.4:g}" for v in (x, y, 0))
+    hi = ",".join(f"{v + 0.4:g}" for v in (x, y, 0))
+    return f"box(min=[{lo}],max=[{hi}])\n"
+
+
+def object_scenes(work: Path) -> list[tuple[str, int, list[Path]]]:
+    """(name, object count, graphs) for P01 T4: one graph file per object."""
+    prims, tpms = [], []
+    for i in range(max(PRIMITIVE_COUNTS)):
+        prims.append(work / f"primitive_{i}.fld")
+        prims[-1].write_text(primitive(i))
+    for i in range(max(TPMS_COUNTS)):
+        tpms.append(work / f"tpms_box_{i}.fld")
+        tpms[-1].write_text(f"translate(by=[{5 * i - 5 * (max(TPMS_COUNTS) // 2)},0,0],"
+                            f"{TPMS_IN_BOX})\n")
+    return ([(f"{n} primitive{'s' if n > 1 else ''}", n, prims[:n]) for n in PRIMITIVE_COUNTS]
+            + [(f"{n} TPMS-in-box", n, tpms[:n]) for n in TPMS_COUNTS])
+
+
+def growth(results: list[tuple[str, int, dict]], kind: str, scale: float) -> str:
+    """Least-squares ms per added object, per phase, over one family of scenes."""
+    pts = [(n, r) for name, n, r in results if kind in name and abs(r["previewScale"] - scale) < 1e-3]
+    if len(pts) < 2:
+        return ""
+    out = []
+    for phase in ("moving", "settled"):
+        for key in ("gpuMs", "wallMs"):
+            xy = [(n, r[phase][key]) for n, r in pts if r[phase][key] is not None]
+            if len(xy) < 2:
+                continue
+            mx = sum(x for x, _ in xy) / len(xy)
+            my = sum(y for _, y in xy) / len(xy)
+            slope = (sum((x - mx) * (y - my) for x, y in xy)
+                     / sum((x - mx) ** 2 for x, _ in xy))
+            out.append(f"{phase} {key[:-2]} {slope:+.2f} ms")
+    counts = ", ".join(str(n) for n, _ in pts)
+    return f"{kind} at {scale:g} ({counts} objects), per added object: " + "; ".join(out)
+
+
 def git_commit() -> str:
     try:
         rev = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
@@ -69,10 +125,10 @@ def git_commit() -> str:
         return "unknown"
 
 
-def run_bench(exe: Path, graph: Path, scale: float, size: str, frames: int,
+def run_bench(exe: Path, graphs: list[Path], scale: float, size: str, frames: int,
               env: dict) -> dict:
     cmd = [str(exe), "--bench", "--bench-size", size, "--bench-frames", str(frames),
-           "--preview-scale", str(scale), str(graph)]
+           "--preview-scale", str(scale), *map(str, graphs)]
     proc = subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=600)
     if proc.returncode != 0:
         raise RuntimeError(f"{' '.join(cmd)} exited {proc.returncode}: {proc.stderr.strip()}")
@@ -83,11 +139,11 @@ def ms(v) -> str:
     return "-" if v is None else f"{v:.1f}"
 
 
-def row(date: str, scene: str, r: dict, size: str, where: str) -> str:
+def row(date: str, unit: str, scene: str, r: dict, size: str, where: str) -> str:
     mv, st = r["moving"], r["settled"]
     moving = f"{ms(mv['gpuMs'])} GPU / {ms(mv['wallMs'])} wall ({mv['traced'][0]}×{mv['traced'][1]})"
     settled = f"{ms(st['gpuMs'])} GPU / {ms(st['wallMs'])} wall"
-    return (f"| {date} | P00.5 | {scene} | {size.replace('x', '×')} | {r['previewScale']:g} "
+    return (f"| {date} | {unit} | {scene} | {size.replace('x', '×')} | {r['previewScale']:g} "
             f"| {moving} | {settled} | {ms(r['compileMs'])} | {where} |")
 
 
@@ -168,6 +224,8 @@ def main() -> int:
                     help="Linux: offload to the NVIDIA GPU (PRIME render offload)")
     ap.add_argument("--field-view", type=Path,
                     help="dualc_field_view binary: also diff 800×600 snapshots against it")
+    ap.add_argument("--objects", action="store_true",
+                    help="P01 T4: scenes of 1, 3, 5, 10 primitives and 1, 3 TPMS-in-box")
     ap.add_argument("--keep", action="store_true", help="keep the scratch folder")
     args = ap.parse_args()
 
@@ -181,30 +239,43 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="dce_measure_"))
     date = datetime.date.today().isoformat()
     jsonl = Path(f"measurements-{date}.jsonl").resolve()
-    rows, first = [], None
+    rows, first, results = [], None, []
     try:
-        todo = scenes(args.samples, work)
+        if args.objects:
+            todo = object_scenes(work)
+            unit, scales = "P01.4", OBJECT_SCALES
+        else:
+            todo = [(name, 1, [graph]) for name, graph in scenes(args.samples, work)]
+            unit, scales = "P00.5", SCALES
         with jsonl.open("a") as out:
-            for name, graph in todo:
-                for scale in SCALES:
+            for name, n, graphs in todo:
+                for scale in scales:
                     print(f"{name} at {scale:g} ...", file=sys.stderr, flush=True)
-                    r = run_bench(args.exe, graph, scale, args.size, args.frames, env)
-                    r.update(scene=name, date=date, commit=git_commit(),
+                    r = run_bench(args.exe, graphs, scale, args.size, args.frames, env)
+                    r.update(scene=name, objects=n, date=date, commit=git_commit(),
                              os=platform.platform(), prime=args.prime)
                     out.write(json.dumps(r) + "\n")
                     first = first or r
+                    results.append((name, n, r))
                     where = f"{r['commit']}, {platform.system()} {platform.release()}, {r['glVersion']}"
-                    rows.append(row(date, name, r, args.size, where))
+                    rows.append(row(date, unit, name, r, args.size, where))
         print(f"\nGPU: {first['glRenderer']}, GL {first['glVersion']}, Qt {first['qt']}")
         print(f"Raw results appended to {jsonl}\n")
         print("\n".join(rows))
-        if args.field_view:
+        if args.objects:
+            print()
+            for kind in ("primitive", "TPMS-in-box"):
+                for scale in scales:
+                    print(growth(results, kind, scale))
+        if args.field_view and not args.objects:
             print("\nSnapshots, editor against dualc_field_view (800×600, default view):")
-            for name, graph in todo:
+            for name, _, (graph,) in todo:
                 print(compare(args.exe, args.field_view, name, graph, work, env))
             args.keep = True
     finally:
-        if not args.keep:
+        if args.keep:
+            print(f"Scene files kept in {work}")
+        else:
             shutil.rmtree(work, ignore_errors=True)
     return 0
 
