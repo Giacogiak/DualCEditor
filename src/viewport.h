@@ -53,6 +53,11 @@ class Viewport : public QOpenGLWidget {
   // An edit lasts until the next setScene, which brings its own values.
   void setParameter(int index, std::vector<float> value);
 
+  // Highlight object `id` of a lowered scene, 0 for none (kSelectedUniform).
+  // It lasts across setScene and repaints at full resolution.
+  void setSelectedObject(int id);
+  int selectedObject() const { return selected_; }
+
   // Program links and shader compiles attempted so far, and the GL compile +
   // link time of the scene on screen, in ms.
   int linkCount() const { return renderer_.linkCount(); }
@@ -86,6 +91,9 @@ class Viewport : public QOpenGLWidget {
   // frame painted while every query is still in flight has no GPU time.
   void gpuFrameTimed(bool preview, QSize traced, double ms);
   void sceneApplied();
+  // A left click (press and release with no drag) at `pos`, in widget pixels.
+  // It moves nothing; the window picks the object under it.
+  void clicked(QPointF pos);
   // `error` is the shader compile or link log.
   void sceneFailed(const QString& error);
 
@@ -128,6 +136,9 @@ class Viewport : public QOpenGLWidget {
   Drag drag_ = Drag::None;
   Qt::MouseButton dragButton_ = Qt::NoButton;
   QPointF lastPos_;
+  QPointF pressPos_;
+  bool dragged_ = false;  // the held button moved past the drag distance
+  int selected_ = 0;
   QTimer settle_;  // single-shot; running = inside the settle window
   QTimer gpuPoll_;  // runs while GPU timer queries are in flight
   struct TimedFrame {

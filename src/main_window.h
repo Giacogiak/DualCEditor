@@ -1,10 +1,12 @@
 #pragma once
 
+#include "pick.h"
 #include "scene.h"
 
 #include <QByteArray>
 #include <QFileSystemWatcher>
 #include <QMainWindow>
+#include <QPointF>
 #include <QString>
 #include <QTimer>
 
@@ -64,6 +66,11 @@ class MainWindow : public QMainWindow {
   // The selected object's id, 0 for none.
   int selectedObject() const { return selected_; }
   void selectObject(int id);
+  // Select the object under the viewport point `pos` (widget pixels), the
+  // nearest along the view ray, or none on empty space; returns its id. The
+  // pick is on the CPU (E-07, pick.h), against the scene on screen: its
+  // visible flags and transform uniforms included.
+  int pickAt(QPointF pos);
 
   Viewport* viewport() const { return viewport_; }
   ParameterPanel* parameters() const { return parameters_; }
@@ -135,6 +142,8 @@ class MainWindow : public QMainWindow {
   Doc doc_;  // on screen
   LoweredScene lowered_;
   std::optional<Pending> pending_;
+  // The fields of the scene on screen, built at the first click after a commit.
+  std::optional<ScenePicker> picker_;
   int selected_ = 0;
   QString file_;
   // Files that did not load: watched, and opened (true) or added (false) by

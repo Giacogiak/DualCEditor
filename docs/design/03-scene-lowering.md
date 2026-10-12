@@ -59,9 +59,12 @@ float sceneSDF(vec3 p) {
 }
 vec3 sceneColor(vec3 p) {   // the colour of the nearest visible object
   float d = 1e10;
+  float id = 0.0;
   vec3 c = vec3(0.8, 0.82, 0.86);
-  if (u_o1_visible > 0.5) { float di = o1_sdf(p); if (di < d) { d = di; c = u_o1_colour; } }
+  if (u_o1_visible > 0.5) { float di = o1_sdf(p); if (di < d) { d = di; c = u_o1_colour; id = 1.0; } }
   ...
+  if (u_selected > 0.5)       // the selection highlight (P01 T3)
+    c = abs(id - u_selected) < 0.5 ? mix(c, vec3(1, 0.78, 0.2), 0.45) : c * 0.45;
   return c;
 }
 ```
@@ -138,6 +141,40 @@ uniform edit must upload the inverse. The trace box stays as lowered until the n
   graph did not change (matched by the object's binding range and `paramKey`), so adding
   or deleting an object does not undo parameter edits. The Parameters dock gets each
   binding's `nodePointer` with `/objects/<id>` in front, since two graphs share pointers.
+
+## Picking and the selection highlight
+
+P01 T3, E-07 (CPU pick). `src/pick.{h,cpp}`, no GL.
+
+- **The ray.** `viewRay(camera, x, y, width, height)` is the trace framework's `rd` for
+  `vUV = (2x/width − 1, 1 − 2y/height)`, from `uCamPos`. Widget pixels or framebuffer
+  pixels give the same ray, since only the ratios count.
+- **The fields.** `ScenePicker(scene, lowered)` builds each object's own graph (not the
+  `transform`-wrapped one) with `FieldGraph::build`, the C++ field the exporter uses,
+  in its local frame, with its own `GraphDirMeshResolver` (a mesh builds its BVH here).
+  `MainWindow` builds it at the first click after a commit and drops it on the next commit.
+- **The march.** The ray goes to the object's frame through `localFromWorld` (rigid, so
+  `t` is the same in both frames), is clipped to the object's local trace box, and is
+  marched as the shader marches: steps of `stepScale · 0.8 · f / |∇f|` (`|∇f|` = 1 when the
+  object's `stepScale` is 1, else central differences with `h = stepMin`), clamped to
+  `[stepMin, stepMax]` computed as `TraceRenderer` does but from the object's box and
+  `featureScale` (`LoweredObject::stepScale`, `featureScale`), then 20 bisections on the
+  first sign change. No step cap of 384: a pick is one ray.
+- **The nearest wins.** Each visible object gives its first crossing; the smallest `t`
+  is the pick. `sceneSDF` is the min of the visible objects, so its first crossing is the
+  same point.
+- **What the pick sees.** Visible flags come from the `Scene` (both docks keep it), and
+  each transform from its uniform as on screen (`setLocalFromWorld`), so a `matrix` edit
+  in the Parameters dock moves the pick. **Other parameter edits do not:** the C++ field is
+  built from the graph's file values. A uniform value cannot be written back into a graph
+  param generically (DualC packs primitives into a flat `params` array, per op), so the
+  pick of an object whose radius was edited in the dock uses the file's radius.
+- **The highlight.** `sceneColor` records the id of the object that gave the colour and
+  reads one scene uniform, `u_selected` (`kSelectedUniform`, a float id, 0 for none). It is
+  not a binding: the Parameters dock does not show it, a re-lowering does not reset it, and
+  `TraceRenderer` sets it at each render from `Viewport::setSelectedObject`. A single
+  graph's shader has no such uniform; setting it does nothing. Tint and dim factors are
+  `kSelectionTint` and 0.45, a first choice to judge on the reference GPU.
 
 ## Verified (2026-10-12, P01 T1)
 

@@ -137,6 +137,7 @@ void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {
   const float noClip[12] = {};
   glUniform4fv(glGetUniformLocation(program_, "uClip"), 3, noClip);
   setUniform1i("uClipMask", 0);
+  setUniform1f(kSelectedUniform, float(selected_));
 
   glBindVertexArray(vao_);
   glDrawArrays(GL_TRIANGLES, 0, 3);

@@ -138,8 +138,8 @@ LoweredScene lowerScene(const Scene& scene) {
   s.featureScale = 0.0f;
   std::ostringstream src, sdf, colour;
   sdf << "float sceneSDF(vec3 p) {\n  float d = 1e10;\n";
-  colour << kSceneColorDecl << " {\n  float d = 1e10;\n  vec3 c = " << glslVec3(kDualCBase)
-         << ";\n";
+  colour << kSceneColorDecl << " {\n  float d = 1e10;\n  float id = 0.0;\n  vec3 c = "
+         << glslVec3(kDualCBase) << ";\n";
 
   bool first = true;
   for (const SceneObject& o : scene.objects()) {
@@ -156,6 +156,8 @@ LoweredScene lowerScene(const Scene& scene) {
                            e.pointer());
     }
     lo.worldBounds = transformBox(lo.localBounds, o.transform);
+    lo.stepScale = part.stepScale;
+    lo.featureScale = part.featureScale;
     s.bounds = first ? lo.worldBounds : unite(s.bounds, lo.worldBounds);
     s.stepScale = std::min(s.stepScale, part.stepScale);
     if (part.featureScale > 0.0f)
@@ -171,7 +173,8 @@ LoweredScene lowerScene(const Scene& scene) {
     src << "uniform float " << visible << ";\nuniform vec3 " << col << ";\n\n";
     sdf << "  if (" << visible << " > 0.5) d = min(d, o" << o.id << "_sdf(p));\n";
     colour << "  if (" << visible << " > 0.5) { float di = o" << o.id
-           << "_sdf(p); if (di < d) { d = di; c = " << col << "; } }\n";
+           << "_sdf(p); if (di < d) { d = di; c = " << col << "; id = " << o.id
+           << ".0; } }\n";
 
     lo.firstBinding = int(s.bindings.size());
     const std::string pointer = "/objects/" + std::to_string(o.id);
@@ -196,7 +199,10 @@ LoweredScene lowerScene(const Scene& scene) {
     out.objects.push_back(lo);
   }
   sdf << "  return d;\n}\n";
-  colour << "  return c;\n}\n";
+  colour << "  if (" << kSelectedUniform << " > 0.5)\n    c = abs(id - " << kSelectedUniform
+         << ") < 0.5 ? mix(c, " << glslVec3(kSelectionTint) << ", 0.45) : c * 0.45;\n"
+         << "  return c;\n}\n";
+  src << "uniform float " << kSelectedUniform << ";\n";
   s.generatedSource = src.str() + sdf.str() + colour.str();
   return out;
 }

@@ -17,12 +17,14 @@
 #include <QFile>
 #include <QImage>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QMimeData>
 #include <QSurfaceFormat>
 #include <QTemporaryDir>
 #include <QUrl>
 #include <QWindow>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 
@@ -204,6 +206,50 @@ int main(int argc, char* argv[]) {
   QObject::connect(&w, &MainWindow::selectionChanged, [&](int id) { signalled = id; });
   panel.setCurrentItem(panel.row(cId));
   check(w.selectedObject() == cId && signalled == cId, "selecting a row selects the object");
+  quiet(vp);
+  check(vp.selectedObject() == cId && vp.grabFramebuffer() != three,
+        "a row selected in the panel is highlighted in the viewport");
+
+  // Click to select (P01 T3): a click on b's pixels selects b, in the panel
+  // too; a click on the background clears the selection. Neither links.
+  {
+    const QImage before = vp.grabFramebuffer();
+    double sx = 0, sy = 0;
+    int n = 0;
+    for (int y = 0; y < three.height(); ++y)
+      for (int x = 0; x < three.width(); ++x) {
+        const QColor c = three.pixelColor(x, y);
+        if (c.red() > 150 && c.green() < 140 && c.blue() < 110) sx += x, sy += y, ++n;
+      }
+    const qreal dpr = vp.devicePixelRatioF();
+    const auto click = [&](QPointF at) {
+      QMouseEvent press(QEvent::MouseButtonPress, at, vp.mapToGlobal(at), Qt::LeftButton,
+                        Qt::LeftButton, Qt::NoModifier);
+      QCoreApplication::sendEvent(&vp, &press);
+      QMouseEvent up(QEvent::MouseButtonRelease, at, vp.mapToGlobal(at), Qt::LeftButton,
+                     Qt::NoButton, Qt::NoModifier);
+      QCoreApplication::sendEvent(&vp, &up);
+      quiet(vp);
+    };
+    const int bId = idAt(w, 1);
+    const OrbitCamera cam = vp.camera();
+    click(QPointF(sx / std::max(n, 1), sy / std::max(n, 1)) / dpr);
+    check(n > 0 && w.selectedObject() == bId && signalled == bId &&
+              panel.selectedId() == bId,
+          "clicking an object selects it, in the panel too");
+    check(vp.selectedObject() == bId && vp.grabFramebuffer() != before,
+          "the clicked object is highlighted");
+    check(vp.camera().yaw == cam.yaw && vp.camera().pitch == cam.pitch,
+          "a click does not turn the view");
+    click(QPointF(4, 4));
+    check(w.selectedObject() == 0 && signalled == 0 && panel.selectedId() == 0,
+          "clicking empty space clears the selection");
+    check(vp.grabFramebuffer() == three, "with no selection the image is the unselected one");
+    check(vp.linkCount() == links && vp.compileCount() == compiles,
+          "selecting links and compiles nothing");
+    panel.setCurrentItem(panel.row(cId));
+    check(w.selectedObject() == cId, "the panel selects again");
+  }
 
   // Delete it with the Delete key on the panel.
   panel.setFocus();

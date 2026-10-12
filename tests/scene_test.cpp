@@ -66,6 +66,10 @@ int main() {
   // Every identifier the codegen made is namespaced, and no two objects share
   // a uniform even where their graphs are equal (DualC would dedup them).
   const std::string& src = s.generatedSource;
+  check(src.find("uniform float u_selected;") != std::string::npos &&
+            src.find("c = u_o2_colour; id = 2.0;") != std::string::npos &&
+            src.find("abs(id - u_selected) < 0.5") != std::string::npos,
+        "sceneColor knows the object of a hit and tints the selected one (u_selected)");
   check(!std::regex_search(src, std::regex(R"(\bf[0-9]+\b)")), "no bare fN left");
   check(!std::regex_search(src, std::regex(R"(\bu_n[0-9]+_)")), "no bare u_nN_ left");
   for (const char* fn : {"o1_sdf", "o2_sdf", "o4_sdf", "float sceneSDF(vec3 p)",

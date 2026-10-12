@@ -6,8 +6,10 @@
 is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
 in its own colour, and visibility and colour are uniforms (`../design/03-scene-lowering.md`).
 `--snapshot` and `--bench` take several graphs. T2 is done: the window holds a scene, a
-drop adds an object, and the Objects dock shows, hides, selects and deletes objects. Next: T3,
-click to select.
+drop adds an object, and the Objects dock shows, hides, selects and deletes objects. T3 is
+done: a click in the viewport selects the nearest object along the ray (a CPU pick), and the
+selection is highlighted in the viewport and the dock. Next: T4, the owner's frame-time
+measurements against object count.
 
 Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches

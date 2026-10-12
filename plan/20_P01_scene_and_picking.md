@@ -58,6 +58,12 @@ and in the panel, in both directions.
 - A ctest covers picking against a known two-object scene, without GL when E-07 chose the
   CPU pick.
 
+*Notes (2026-10-12, T3).* The pick marches each object's own C++ field
+(`src/pick.{h,cpp}`); it follows visibility and transform uniforms but not other
+Parameters-dock edits (`03-scene-lowering.md` § Picking). The highlight is one scene
+uniform, `u_selected`, not a binding. A left press now starts an orbit only past the drag
+distance, so a click does not turn the view (`HANDOFF_P01_TASK3.md`).
+
 ### T4. Frame time against object count — human check
 
 The owner measures on the laptop, at preview scales 0.35 and 1.0, in a 1280×800 window.

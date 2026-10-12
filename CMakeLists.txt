@@ -67,6 +67,8 @@ add_library(dualceditor_core STATIC
   src/objects_panel.cpp
   src/objects_panel.h
   src/orbit_camera.h
+  src/pick.cpp
+  src/pick.h
   src/parameter_panel.cpp
   src/parameter_panel.h
   src/scene.cpp

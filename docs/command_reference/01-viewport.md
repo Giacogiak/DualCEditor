@@ -140,7 +140,13 @@ name; the tooltip gives the object id).
 | Input | Effect |
 |---|---|
 | Click the checkbox (or `Space` on the selected row) | Hide or show the object. One uniform (`u_o<id>_visible`): no recompile, no relink, and showing it again gives the same image. A hidden object is not traced and not coloured; the trace box stays the same. |
-| Click a row, arrow keys | Select that object. One at a time. Clicking in the viewport does not select yet (P01 T3). |
+| Click a row, arrow keys | Select that object. One at a time. The viewport highlights it (below). |
+| Left click in the viewport | Select the object under the cursor: the nearest along the view ray where objects overlap on screen. A click on the background clears the selection. Its row is selected in this dock. Hidden objects are not picked. |
+
+The selected object is tinted toward amber (mix 0.45 with (1.0, 0.78, 0.20), before the
+1/2.2 gamma) and the other objects are dimmed to 0.45 of their colour; with nothing
+selected every object has its own colour. Selecting sets one uniform (`u_selected`): no
+recompile, no relink.
 | `Delete` (`QKeySequence::Delete`, by meaning) with the dock focused, or `Edit ▸ Delete Object` | Remove the selected object. The scene is lowered and linked again (one link); the camera stays. The other objects keep their parameter edits. Deleting the last one leaves the viewport on the background. |
 
 The swatch is the object's colour with the shader's 1/2.2 gamma: a lit face of the object is
@@ -204,9 +210,10 @@ The same semantics as DualC's viewers (`OrbitState` in `examples/raymarch_gl`), 
 
 | Input | Action |
 |---|---|
-| Left-drag | Orbit. Yaw −0.008 rad per pixel right, pitch +0.008 rad per pixel down. Pitch is clamped to ±1.5 rad. |
+| Left-drag | Orbit. Yaw −0.008 rad per pixel right, pitch +0.008 rad per pixel down. Pitch is clamped to ±1.5 rad. A drag starts once the cursor is the platform's drag distance (`QApplication::startDragDistance()`, 10 px by default, Manhattan) from the press; the whole movement then counts. |
+| Left click (press and release within the drag distance, no Shift) | Select the object under the cursor, or clear the selection on the background (§ Objects). The view does not move. |
 | Wheel | Dolly. Distance × 0.9 per notch away from you (closer), ÷ 0.9 per notch toward you. Floor 1e-4. |
-| Middle-drag, or Shift + left-drag | Pan. The target slides in the view plane, and the point at the target follows the cursor. Yaw, pitch and distance are kept. |
+| Middle-drag, or Shift + left-drag | Pan (from the same drag distance). The target slides in the view plane, and the point at the target follows the cursor. Yaw, pitch and distance are kept. |
 | `F` (either case) | Frame the bounds (does nothing while no graph is on screen). The target goes to the trace box centre and the distance to 1.3 × its diagonal. Yaw and pitch are kept. |
 
 Keys are matched by the character they type (`QKeyEvent::text()`), not by key position.

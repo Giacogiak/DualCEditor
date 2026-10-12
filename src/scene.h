@@ -56,6 +56,13 @@ SceneColour sceneColourFor(int id);
 // is "u_o2_n3_radius".
 std::string objectUniformName(int id, const char* key);
 
+// The scene uniform naming the selected object: a float holding its id, 0 for
+// none. It is not a binding (not a parameter): the renderer sets it every frame
+// (TraceRenderer::setSelectedObject). sceneColor tints the selected object
+// toward kSelectionTint and dims the others while one is selected.
+inline constexpr const char* kSelectedUniform = "u_selected";
+inline constexpr SceneColour kSelectionTint = {1.0f, 0.78f, 0.20f};
+
 // Where each object's uniforms sit in LoweredScene::scene.bindings.
 struct LoweredObject {
   int id = 0;
@@ -65,6 +72,8 @@ struct LoweredObject {
   int colourBinding = -1;
   dualc::BBox localBounds;  // the graph's padded trace box, before transform
   dualc::BBox worldBounds;  // localBounds transformed, as an axis-aligned box
+  // DualC's march constants of the object compiled alone (GlslScene's).
+  float stepScale = 1.0f, featureScale = 0.0f;
 };
 
 struct LoweredScene {

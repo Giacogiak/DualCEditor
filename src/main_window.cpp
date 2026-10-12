@@ -128,6 +128,8 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     if (p.attempt) reportError(p.loaded, "shader error: " + error.trimmed());
   });
 
+  connect(viewport_, &Viewport::clicked, this, [this](QPointF pos) { pickAt(pos); });
+
   connect(viewport_, &Viewport::gpuFrameTimed, this,
           [this](bool preview, QSize, double ms) {
             (preview ? previewMs_ : frameMs_) = ms;
@@ -194,9 +196,42 @@ void MainWindow::selectObject(int id) {
   if (!doc_.scene.find(id)) id = 0;
   if (objects_->selectedId() != id) objects_->select(id);
   deleteAction_->setEnabled(id != 0);
+  viewport_->setSelectedObject(id);
   if (id == selected_) return;
   selected_ = id;
   emit selectionChanged(id);
+}
+
+int MainWindow::pickAt(QPointF pos) {
+  if (!viewport_->hasScene() || pending_ || doc_.scene.isEmpty()) {
+    selectObject(0);
+    return 0;
+  }
+  if (!picker_) {
+    try {
+      picker_.emplace(doc_.scene, lowered_);
+    } catch (const std::exception& e) {
+      log(QString("pick: %1").arg(QString::fromUtf8(e.what())));
+      return selected_;
+    }
+  }
+  // The scene as on screen: visible flags from the scene (the Objects dock
+  // and the Parameters dock keep it), transforms from their uniforms.
+  const std::vector<fg::UniformBinding>& values = viewport_->scene().bindings;
+  for (const LoweredObject& lo : lowered_.objects) {
+    if (const SceneObject* o = doc_.scene.find(lo.id)) picker_->setVisible(lo.id, o->visible);
+    if (lo.transformBinding < 0 || lo.transformBinding >= int(values.size())) continue;
+    const std::vector<float>& m = values[std::size_t(lo.transformBinding)].value;
+    if (m.size() != 16) continue;
+    dualc::Mat4 localFromWorld;
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = m[std::size_t(i * 4 + j)];
+    picker_->setLocalFromWorld(lo.id, localFromWorld);
+  }
+  const PickHit hit = picker_->pick(
+      viewRay(viewport_->camera(), pos.x(), pos.y(), viewport_->width(), viewport_->height()));
+  selectObject(hit.id);
+  return hit.id;
 }
 
 QString MainWindow::logText() const {
@@ -290,6 +325,7 @@ bool MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
 void MainWindow::commit(Pending p) {
   doc_ = std::move(p.doc);
   lowered_ = std::move(p.lowered);
+  picker_.reset();
   waiting_.erase(std::remove_if(waiting_.begin(), waiting_.end(),
                                 [this](const std::pair<QString, bool>& w) {
                                   for (const auto& [id, file] : doc_.files)

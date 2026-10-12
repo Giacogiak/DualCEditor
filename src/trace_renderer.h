@@ -39,6 +39,9 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // A parameter edit: upload one binding of the scene on screen to its
   // uniform. No compile, no link.
   void setParameter(const dce::fieldgraph::UniformBinding& b);
+  // The selected object's id, 0 for none: kSelectedUniform, set at each
+  // render (a lowered scene's shader has it; a single graph's ignores it).
+  void setSelectedObject(int id) { selected_ = id; }
 
   // Draw one width x height frame into the bound framebuffer.
   void render(int width, int height, const OrbitCamera& cam);
@@ -89,4 +92,5 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   dualc::BBox bounds_;
   float stepScale_ = 1.0f;
   float featureScale_ = 0.0f;
+  int selected_ = 0;
 };

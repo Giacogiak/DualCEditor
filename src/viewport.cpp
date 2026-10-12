@@ -1,5 +1,6 @@
 #include "viewport.h"
 
+#include <QApplication>
 #include <QDebug>
 #include <QKeyEvent>
 #include <QLoggingCategory>
@@ -171,6 +172,13 @@ void Viewport::setParameter(int index, std::vector<float> value) {
   viewChanged();
 }
 
+void Viewport::setSelectedObject(int id) {
+  if (id == selected_) return;
+  selected_ = id;
+  renderer_.setSelectedObject(id);
+  update();
+}
+
 void Viewport::pollGpuTimers() {
   if (!glReady_) return gpuPoll_.stop();
   std::vector<std::pair<TimedFrame, double>> done;
@@ -213,11 +221,19 @@ void Viewport::mousePressEvent(QMouseEvent* event) {
   // Nothing moved yet, so nothing repaints; the next frame is a preview
   // because a drag is held.
   dragButton_ = event->button();
-  lastPos_ = event->position();
+  lastPos_ = pressPos_ = event->position();
+  dragged_ = false;
 }
 
 void Viewport::mouseMoveEvent(QMouseEvent* event) {
   if (drag_ == Drag::None) return QOpenGLWidget::mouseMoveEvent(event);
+  // A click may shake by a pixel or two: the drag starts past the platform's
+  // drag distance, so a click does not turn the view.
+  if (!dragged_) {
+    if ((event->position() - pressPos_).manhattanLength() < QApplication::startDragDistance())
+      return;
+    dragged_ = true;
+  }
   const QPointF d = event->position() - lastPos_;
   lastPos_ = event->position();
   if (drag_ == Drag::Orbit)
@@ -231,7 +247,13 @@ void Viewport::mouseReleaseEvent(QMouseEvent* event) {
   // The drag ends when its button comes up; the settle wait starts there.
   if (drag_ == Drag::None || event->button() != dragButton_)
     return QOpenGLWidget::mouseReleaseEvent(event);
+  // A plain left click: Shift+left is a pan, kept for later selection keys.
+  const bool click = !dragged_ && drag_ == Drag::Orbit;
   drag_ = Drag::None;
+  if (click) {
+    emit clicked(event->position());
+    return;
+  }
   settle_.start();
 }
 

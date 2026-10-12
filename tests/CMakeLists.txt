@@ -99,3 +99,11 @@ target_link_libraries(objects_panel_test PRIVATE dualceditor_core)
 dualceditor_target_options(objects_panel_test)
 add_test(NAME objects_panel COMMAND objects_panel_test)
 set_tests_properties(objects_panel PROPERTIES SKIP_RETURN_CODE 77)
+
+# The CPU pick (E-07), GL-free: two spheres overlapping on screen, the nearest
+# along the ray wins, a hidden one is skipped, empty space picks nothing; a
+# transform edit and a TPMS object; viewRay is the shader's ray.
+add_executable(pick_test pick_test.cpp)
+target_link_libraries(pick_test PRIVATE dualceditor_core)
+dualceditor_target_options(pick_test)
+add_test(NAME pick COMMAND pick_test)
