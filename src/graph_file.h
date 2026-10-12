@@ -56,6 +56,8 @@ struct GraphParse {
   QString error;
 };
 GraphParse parseGraphFile(const QString& path);
+// Parse graph text read from `path`, as compileGraphFileText reads it.
+GraphParse parseGraphFileText(const QByteArray& text, const QString& path);
 
 // The suffixes File > Open and drag and drop accept, lower case.
 bool isGraphFileName(const QString& path);

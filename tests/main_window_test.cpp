@@ -1,5 +1,6 @@
 // Drives a live MainWindow the three ways a graph comes in, and the file
-// watch: a drop of a .json and of a .fld renders it; a drag of another file
+// watch: a drop of a .json and of a .fld renders it (the second drop adds an
+// object; the first is then removed); a drag of another file
 // type is refused; saving the file (in place, or by write-and-rename) re-renders
 // it with the camera kept; a save with the same text repaints nothing; a broken
 // file shows its error with its JSON pointer and leaves the image in place; a
@@ -217,6 +218,13 @@ int main(int argc, char* argv[]) {
         "the .fld loads");
   const QImage cubeImage = vp.grabFramebuffer();
   check(cubeImage != gyroidImage, "the .fld renders a different image");
+  // A drop adds (P01 T2): the gyroid is still there and hides the cube inside
+  // it. Remove it, so the cube's edits below show.
+  check(w.scene().objects().size() == 2, "the drop added the .fld as a second object");
+  w.removeObject(w.scene().objects().front().id);
+  quiet(vp);
+  check(w.scene().objects().size() == 1 && w.scene().objects().front().name == "cube.fld",
+        "removing the gyroid leaves the cube");
   const OrbitCamera framed = vp.camera();
 
   // Orbit away, then save an edit: the image changes, the camera stays.

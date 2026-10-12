@@ -41,6 +41,9 @@ class Viewport : public QOpenGLWidget {
   // camera stays where it is (a reload). A failed link emits sceneFailed and
   // leaves the previous scene, and its image, in place.
   void setScene(dce::fieldgraph::GlslScene scene, bool frame);
+  // Take the scene off screen: the viewport shows the background, and the
+  // camera stays. Links nothing.
+  void clearScene();
   bool hasScene() const { return hasScene_; }
   const dce::fieldgraph::GlslScene& scene() const { return scene_; }
 

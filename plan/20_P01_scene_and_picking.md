@@ -41,6 +41,12 @@ adds an object instead of replacing the scene.
 - Show, hide, select and delete all work from the panel.
 - The command-reference page is updated.
 
+*Notes (2026-10-12, T2).* A drop adds every graph file it carries; `File ▸ Open…` still
+replaces the scene, and `File ▸ Add…` adds. The window now takes several `graph`
+arguments (the first opened, the others added) instead of exiting 1. `main_window_test`
+encoded "a drop replaces": it now removes the first object after the second drop, so its
+reload checks still see the cube (`HANDOFF_P01_TASK2.md`).
+
 ### T3. Click to select
 
 Implement picking as decided in E-07. The selected object is highlighted in the viewport

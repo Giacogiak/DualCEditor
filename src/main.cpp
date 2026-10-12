@@ -111,15 +111,10 @@ int main(int argc, char* argv[]) {
   parser.addPositionalArgument(
       "graph",
       "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json. "
-      "--snapshot and --bench take several: a scene of one object per graph.",
+      "Several make a scene of one object per graph.",
       "[graph...]");
   parser.process(*app);
   const QStringList graphs = parser.positionalArguments();
-  if (graphs.size() > 1 && !parser.isSet(snapshotOption) && !parser.isSet(benchOption)) {
-    std::fprintf(stderr, "DualCEditor: the window opens one graph at most, got %d\n",
-                 int(graphs.size()));
-    return 1;
-  }
   const QString graph = parser.positionalArguments().isEmpty()
                             ? QString(kDefaultGraph)
                             : parser.positionalArguments().first();
@@ -177,6 +172,7 @@ int main(int argc, char* argv[]) {
   MainWindow window(previewScale);
   window.resize(1200, 800);
   window.openFile(graph);
+  for (int i = 1; i < graphs.size(); ++i) window.addFile(graphs[i]);
   window.show();
 
   return app->exec();

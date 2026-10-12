@@ -27,6 +27,8 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // bindings. On failure the previous scene stays and `*error` holds the log.
   bool setScene(const dce::fieldgraph::GlslScene& scene, std::string* error);
   bool hasScene() const { return program_ != 0; }
+  // Drop the trace program and its mesh grids: render draws the background.
+  void clearScene();
   // Program links attempted so far (a parameter edit must not add one), and
   // the wall time of the last successful compile and link, in ms.
   int linkCount() const { return linkCount_; }

@@ -5,7 +5,9 @@
 **Now: P01, scene and picking (Spike B, `../../plan/20_P01_scene_and_picking.md`).** E-07
 is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
 in its own colour, and visibility and colour are uniforms (`../design/03-scene-lowering.md`).
-`--snapshot` and `--bench` take several graphs. Next: T2, the Objects panel.
+`--snapshot` and `--bench` take several graphs. T2 is done: the window holds a scene, a
+drop adds an object, and the Objects dock shows, hides, selects and deletes objects. Next: T3,
+click to select.
 
 Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches

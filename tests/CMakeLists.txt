@@ -90,3 +90,12 @@ add_test(NAME scene_render
   COMMAND scene_render_test
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
 set_tests_properties(scene_render PROPERTIES SKIP_RETURN_CODE 77)
+
+# The Objects dock of a live MainWindow: two drops give objects in the panel
+# and on screen; show and hide link nothing and restore the image; selecting a
+# row selects the object; Delete removes it, down to an empty viewport.
+add_executable(objects_panel_test objects_panel_test.cpp)
+target_link_libraries(objects_panel_test PRIVATE dualceditor_core)
+dualceditor_target_options(objects_panel_test)
+add_test(NAME objects_panel COMMAND objects_panel_test)
+set_tests_properties(objects_panel PROPERTIES SKIP_RETURN_CODE 77)

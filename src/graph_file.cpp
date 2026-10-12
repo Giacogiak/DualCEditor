@@ -60,14 +60,19 @@ GraphLoad loadGraphFile(const QString& path) {
 }
 
 GraphParse parseGraphFile(const QString& path) {
-  GraphParse out;
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
+    GraphParse out;
     out.error = QString("cannot read %1: %2").arg(path, file.errorString());
     return out;
   }
+  return parseGraphFileText(file.readAll(), path);
+}
+
+GraphParse parseGraphFileText(const QByteArray& text, const QString& path) {
+  GraphParse out;
   try {
-    out.graph = parseGraphText(file.readAll().toStdString(),
+    out.graph = parseGraphText(text.toStdString(),
                                path.endsWith(".json", Qt::CaseInsensitive));
   } catch (const fg::GraphError& e) {
     out.error = QString("field-graph error%1%2: %3")

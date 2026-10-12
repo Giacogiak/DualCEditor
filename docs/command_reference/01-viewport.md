@@ -15,7 +15,7 @@ field's own bounds padded by 5%.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `graph` (positional) | `gyroid_box.json` | The graph to open. The window takes one; a second exits 1. `--snapshot` and `--bench` take several: each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
+| `graph` (positional) | `gyroid_box.json` | The graphs to open. Each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window the first is opened and the others added (*Objects* below). In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
 | `--snapshot PATH` | off | Render one 800×600 frame of `graph` (default view) off-screen to the PNG `PATH`, then exit. Opens no window. |
 | `--preview-scale S` | `0.5` | Resolution factor while the view moves. The view is traced at `S` × the window's pixels, then upscaled linearly. It returns to full resolution 0.18 s after the last input. Clamped to 0.1 – 1. `1` turns the preview off. A value that is not a number exits 1. Same flag and default as `dualc_field_view`. |
 | `--bench` | off | Time `graph` while orbiting and when settled, print one JSON line on stdout, and exit. See *Measurement run*. Vsync is off for the run. |
@@ -42,6 +42,7 @@ so the result is exit 77.
 ```bash
 ./build/bin/DualCEditor                                   # open the viewport
 ./build/bin/DualCEditor part.fld                          # open (and watch) a graph
+./build/bin/DualCEditor a.fld b.fld c.fld                 # a window on a scene of three objects
 ./build/bin/DualCEditor --preview-scale 0.25              # coarser, faster preview while moving
 ./build/bin/DualCEditor --snapshot out.png                # one frame, hardware GL
 ./build/bin/DualCEditor --snapshot out.png part.json      # one frame of part.json
@@ -50,9 +51,9 @@ LIBGL_ALWAYS_SOFTWARE=1 ./build/bin/DualCEditor --snapshot out.png   # Mesa llvm
 xvfb-run -s "-screen 0 1024x768x24" ./build/bin/DualCEditor --snapshot out.png  # no display (not yet run: xvfb is not installed on the dev box)
 ```
 
-## Several graphs (`--snapshot`, `--bench`)
+## Several graphs
 
-With more than one `graph`, `--snapshot` and `--bench` build a scene of one object per
+With more than one `graph`, the window, `--snapshot` and `--bench` build a scene of one object per
 graph and draw it through one shader (`../design/03-scene-lowering.md`). Each object keeps
 its graph's own position: the transform is the identity, so graphs that overlap in space
 overlap on screen (place them with `translate(...)` in the graph). Colours follow the order
@@ -73,21 +74,25 @@ printf 'translate(by=[2,0,0],sphere(radius=0.8))' > c.fld
 
 | Way | Behaviour |
 |---|---|
-| `File ▸ Open…` (`Ctrl+O`, the platform's Open shortcut) | File dialog filtered on `*.json *.fld`, with `All files` as the other filter. Starts in the open file's folder. |
-| The `graph` argument | As above. |
-| Drop a file on the window | Accepted when the drag carries a local file ending in `.json` or `.fld` (any case). Other files are refused: the cursor shows no drop. With several files, the first graph is opened. A drop anywhere on the window counts, the viewport and the log included. |
+| `File ▸ Open…` (`Ctrl+O`, the platform's Open shortcut) | File dialog filtered on `*.json *.fld`, with `All files` as the other filter. Starts in the last file's folder. **Replaces** the scene with one object. |
+| `File ▸ Add…` (no shortcut) | The same dialog, several files allowed. **Adds** one object per file. |
+| The `graph` arguments | The first is opened, the others added. |
+| Drop files on the window | Accepted when the drag carries a local file ending in `.json` or `.fld` (any case). Other files are refused: the cursor shows no drop. **Adds** one object per graph file the drag carries, in order, to the scene on screen (the default `gyroid_box.json` included: delete it from the Objects dock). A drop anywhere on the window counts, the viewport, the docks and the log included. |
 
-Opening frames the camera on the new graph's trace box, like `F`. The window title becomes
-`<file name> - DualCEditor`.
+Opening or adding frames the camera on the scene's trace box (the union of every object's
+box), like `F`. The window title is `<object name> - DualCEditor` with one object,
+`N objects - DualCEditor` with several. An object is named after its file.
 
 A relative mesh path (`mesh(path="cube.obj")`) is looked up beside the graph file first,
 then in the working directory. `dualc_field_view` looks only in the working directory.
 
 ### Reload on save
 
-The open file is watched (`QFileSystemWatcher`, the file and its folder). When it changes
-on disk, it is re-read 0.1 s after the last change signal, and re-rendered only if its text
-differs from the text last loaded. The camera is kept, as in `dualc_field_view`. Press `F`
+Every object's file is watched (`QFileSystemWatcher`, the file and its folder). When one
+changes on disk, it is re-read 0.1 s after the last change signal, and re-rendered only if its
+text differs from the text last loaded. Its new graph replaces the graph of every object made
+from it; the other objects keep their parameter edits, visibility and colour. Files that
+change together reload as one. The camera is kept, as in `dualc_field_view`. Press `F`
 to frame the new bounds. A save that renames a new file over the old one (as many editors
 do) is followed too. A save with the same text, or a change to another file in the folder,
 loads and paints nothing. A mesh file the graph names is not watched: editing it does not
@@ -101,19 +106,23 @@ A graph that cannot be read, a field-graph error, or a shader compile or link er
   plus `(keeping the previous scene)` when a scene is on screen;
 - the **Log** dock, with a time stamp and the full message (a shader log is several lines).
 
-The previous scene, and its image, stay on screen. Nothing repaints. The failing file
-stays the open, watched one, so the next save that fixes it renders it. For the shorthand,
+The previous scene, and its image, stay on screen. Nothing repaints. The failing file is
+watched, so the next save that fixes it opens it (`File ▸ Open…`, first argument) or adds it
+(a drop, `File ▸ Add…`, further arguments). A lowering error names the object:
+`field-graph error at /root/in/1: object 2 (b.fld): unknown op 'no-such-op'`. For the shorthand,
 the pointer is a character offset.
 
 ## Window
 
 | Part | Content |
 |---|---|
-| `File` menu | `Open…` (`Ctrl+O`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). |
-| `View` menu | `Parameters` and `Log`: show or hide each dock. |
-| Status bar, left | The last load: `Loaded <file>: N nodes, M parameters`, or the last error. |
+| `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Quit` (`Ctrl+Q`, the platform's Quit shortcut). |
+| `Edit` menu | `Delete Object`: removes the selected object. Greyed out with nothing selected. |
+| `View` menu | `Objects`, `Parameters` and `Log`: show or hide each dock. |
+| Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
+| Objects dock | On the right, above Parameters. One row per object. See *Objects* below. |
 | Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. See *Timing* below. |
-| Parameters dock | On the right. One editor per parameter of the graph on screen. See *Parameters* below. |
+| Parameters dock | On the right. One editor per parameter of the scene on screen. See *Parameters* below. |
 | Log dock | At the bottom, five lines high, read-only. One line per load (with its shader compile ms), reload and error. |
 
 Each dock can be closed, floated or moved to another side. With both docks open, the default
@@ -122,11 +131,33 @@ Each dock can be closed, floated or moved to another side. With both docks open,
 Menu shortcuts are Qt's standard key sequences, matched on the character typed, so they
 follow the keyboard layout (Belgian AZERTY included).
 
+## Objects
+
+The Objects dock lists the scene's objects in scene order (the order they were opened or
+added). Each row is a visibility checkbox, a colour swatch and the object's name (its file
+name; the tooltip gives the object id).
+
+| Input | Effect |
+|---|---|
+| Click the checkbox (or `Space` on the selected row) | Hide or show the object. One uniform (`u_o<id>_visible`): no recompile, no relink, and showing it again gives the same image. A hidden object is not traced and not coloured; the trace box stays the same. |
+| Click a row, arrow keys | Select that object. One at a time. Clicking in the viewport does not select yet (P01 T3). |
+| `Delete` (`QKeySequence::Delete`, by meaning) with the dock focused, or `Edit ▸ Delete Object` | Remove the selected object. The scene is lowered and linked again (one link); the camera stays. The other objects keep their parameter edits. Deleting the last one leaves the viewport on the background. |
+
+The swatch is the object's colour with the shader's 1/2.2 gamma: a lit face of the object is
+about that colour. Colours follow the order objects were made in a scene: the first is
+DualC's grey, then orange, blue, green, yellow, purple, teal, pink. `File ▸ Open…` starts a
+new scene, so ids and colours start again. There is no colour picker yet: edit the
+object's `colour` in the Parameters dock, and the swatch follows. Unchecking `visible`
+there (0) checks the box off too.
+
 ## Parameters
 
-The Parameters dock lists DualC's binding table (`GlslScene::bindings`): every value of the
-graph that the generated shader reads from a uniform. They are grouped under their node, shown
-as its op and its pointer (`onion /root/in/0/in/1`). Each row is the parameter's name
+The Parameters dock lists the binding table of the scene's shader (`GlslScene::bindings`):
+every value that the generated shader reads from a uniform. They are grouped under their
+object's name, then under their node, shown as its op and its pointer with the object's in
+front (`onion /objects/1/root/in/0/in/1`). Each object ends with its own `object
+/objects/<id>` group: `matrix` (the object's local-from-world transform), `visible` (1 or 0)
+and `colour` (linear RGB). Each row is the parameter's name
 (`thickness`, `wavelength`, `center`, `mat`). Its tooltip gives the uniform's type and name.
 
 | Type | Editor |
@@ -149,7 +180,7 @@ wavelength or thickness gives what the shader computes.
 An edit only sets the uniform. The shader is not recompiled or relinked, so it shows at once.
 The view previews and settles as for a camera move. Edits are not written to the file. A
 reload of the file, or opening another one, brings back the file's values and rebuilds the
-dock. The trace step sizes stay those of the file's values: they come from the compiled graph,
+dock. Adding or deleting another object keeps them. The trace step sizes stay those of the file's values: they come from the compiled graph,
 as in `dualc_field_view`. A wavelength much smaller than the file's can trace with visible
 artefacts. Save it in the file to recompute them.
 

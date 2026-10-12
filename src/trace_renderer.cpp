@@ -227,6 +227,12 @@ void TraceRenderer::release() {
   vao_ = 0;
 }
 
+void TraceRenderer::clearScene() {
+  releaseTextures();
+  if (program_) glDeleteProgram(program_);
+  program_ = 0;
+}
+
 void TraceRenderer::releaseTextures() {
   if (textures_.empty()) return;
   glDeleteTextures(static_cast<GLsizei>(textures_.size()), textures_.data());

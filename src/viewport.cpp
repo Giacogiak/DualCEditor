@@ -126,6 +126,19 @@ void Viewport::setScene(dce::fieldgraph::GlslScene scene, bool frame) {
   doneCurrent();
 }
 
+void Viewport::clearScene() {
+  pending_.reset();
+  if (!hasScene_) return;
+  hasScene_ = false;
+  scene_ = {};
+  if (glReady_) {
+    makeCurrent();
+    renderer_.clearScene();
+    doneCurrent();
+  }
+  update();
+}
+
 void Viewport::linkScene(dce::fieldgraph::GlslScene scene, bool frame) {
   std::string error;
   if (!renderer_.setScene(scene, &error)) {

@@ -107,6 +107,10 @@ SceneObject* Scene::find(int id) {
   return nullptr;
 }
 
+const SceneObject* Scene::find(int id) const {
+  return const_cast<Scene*>(this)->find(id);
+}
+
 SceneColour sceneColourFor(int id) {
   static constexpr SceneColour kPalette[] = {
       {0.85f, 0.42f, 0.25f},  // orange

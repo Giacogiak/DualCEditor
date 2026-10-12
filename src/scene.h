@@ -12,7 +12,7 @@
 // The editor's scene: a list of objects, each a field graph placed in the
 // world by a rigid transform, with a visible flag and a colour. It is lowered
 // to one shader (lowerScene), compiled once; visibility, colour and transform
-// are uniforms of that shader (docs/design/02-scene-lowering.md).
+// are uniforms of that shader (docs/design/03-scene-lowering.md).
 
 // A colour in the space of the trace shader's `base`: linear, before its
 // 1/2.2 gamma. DualC's own surface colour is kDualCBase.
@@ -37,6 +37,7 @@ class Scene {
   SceneObject& add(QString name, dce::fieldgraph::GraphNode graph, QString meshDir = {});
   bool remove(int id);
   SceneObject* find(int id);
+  const SceneObject* find(int id) const;
   const std::vector<SceneObject>& objects() const { return objects_; }
   bool isEmpty() const { return objects_.empty(); }
 

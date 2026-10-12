@@ -5,6 +5,7 @@
 #include <QGridLayout>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QSignalBlocker>
 
 namespace fg = dce::fieldgraph;
 
@@ -49,7 +50,8 @@ ParameterPanel::ParameterPanel(QWidget* parent) : QScrollArea(parent) {
 }
 
 void ParameterPanel::setBindings(const std::vector<fg::UniformBinding>& bindings,
-                                 const std::map<std::string, std::string>& nodeOps) {
+                                 const std::map<std::string, std::string>& nodeOps,
+                                 const std::vector<std::pair<int, QString>>& sections) {
   editors_.clear();
   auto* content = new QWidget;
   auto* form = new QFormLayout(content);
@@ -63,8 +65,16 @@ void ParameterPanel::setBindings(const std::vector<fg::UniformBinding>& bindings
     const QString opName =
         op != nodeOps.end() ? QString::fromStdString(op->second) : QString();
     const QString pointer = QString::fromStdString(b.nodePointer);
+    bool newSection = false;
+    for (const auto& [at, title] : sections) {
+      if (at != int(i)) continue;
+      auto* heading = new QLabel(QString("<big><b>%1</b></big>").arg(title.toHtmlEscaped()));
+      heading->setTextFormat(Qt::RichText);
+      form->addRow(heading);
+      newSection = true;
+    }
     // The codegen emits a node's bindings together: one heading per node.
-    if (i == 0 || b.nodePointer != group) {
+    if (i == 0 || newSection || b.nodePointer != group) {
       group = b.nodePointer;
       auto* heading = new QLabel(
           QString("<b>%1</b> <span style='color:gray'>%2</span>")
@@ -123,4 +133,13 @@ QDoubleSpinBox* ParameterPanel::editor(int index, int component) const {
   const std::vector<QDoubleSpinBox*>& boxes = editors_[std::size_t(index)];
   if (component < 0 || component >= int(boxes.size())) return nullptr;
   return boxes[std::size_t(component)];
+}
+
+void ParameterPanel::showValue(int index, const std::vector<float>& value) {
+  if (index < 0 || index >= int(editors_.size())) return;
+  const std::vector<QDoubleSpinBox*>& boxes = editors_[std::size_t(index)];
+  for (std::size_t k = 0; k < boxes.size() && k < value.size(); ++k) {
+    const QSignalBlocker quiet(boxes[k]);
+    boxes[k]->setValue(double(value[k]));
+  }
 }

@@ -132,9 +132,12 @@ uniform edit must upload the inverse. The trace box stays as lowered until the n
 
 - `--snapshot` and `--bench` with several `graph` arguments (`src/main.cpp`,
   `../command_reference/01-viewport.md` § Several graphs).
-- The window still shows one graph through `loadGraphFile`, not a `Scene`. T2 moves it
-  onto the scene; the Parameters dock will then need to tell an object's own uniforms
-  (`nodePointer` `/objects/<id>`) from its graph's.
+- The window (P01 T2, `src/main_window.cpp`). It holds a `Scene` and lowers it again on
+  each structural change (open, add, delete, a reloaded file); show, hide and a colour edit
+  set a uniform. A lowering keeps the current values of the bindings of every object whose
+  graph did not change (matched by the object's binding range and `paramKey`), so adding
+  or deleting an object does not undo parameter edits. The Parameters dock gets each
+  binding's `nodePointer` with `/objects/<id>` in front, since two graphs share pointers.
 
 ## Verified (2026-10-12, P01 T1)
 
