@@ -19,6 +19,8 @@ frame time with several mesh objects misses the target on the GTX 1050 Ti.
 ## E-23 — Per-object bounding-box culling in the shader
 
 **Decided (Giacomo, 2026-10-12):** trigger on any clear slope in the P01 measurement; P02 plans the culling.
+**Triggered (P01.4, 2026-10-12):** about +0.29 ms per added primitive and +2.5 ms per added
+TPMS-in-box, settled GPU at 1280×800 on the GTX 1050 Ti (`../roadmap/02-measurements.md`).
 **Trigger:** frame time grows with the number of non-overlapping objects (P01's measurement).
 
 ## E-24 — Reuse of one object in several operations (DAG references)

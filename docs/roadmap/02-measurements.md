@@ -14,6 +14,20 @@ OS and driver, window size, and how the number was taken: GPU timer query, or wa
 | 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.35 | 1.9 GPU / 3.9 wall (448×280) | 7.3 GPU / 8.2 wall | 22.1 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 0.5 | 2.7 GPU / 3.8 wall (640×400) | 7.3 GPU / 8.3 wall | 23.4 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
 | 2026-10-10 | P00.5 | mesh_lattice.json | 1280×800 | 1 | 8.0 GPU / 8.9 wall (1280×800) | 7.3 GPU / 8.3 wall | 21.2 | 53c6cb6, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 1 primitive | 1280×800 | 0.35 | 0.2 GPU / 4.1 wall (448×280) | 0.6 GPU / 3.3 wall | 156.8 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 1 primitive | 1280×800 | 1 | 0.6 GPU / 3.8 wall (1280×800) | 0.6 GPU / 2.7 wall | 13.8 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 3 primitives | 1280×800 | 0.35 | 0.3 GPU / 3.0 wall (448×280) | 1.1 GPU / 3.8 wall | 265.5 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 3 primitives | 1280×800 | 1 | 1.0 GPU / 2.8 wall (1280×800) | 1.1 GPU / 2.6 wall | 17.6 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 5 primitives | 1280×800 | 0.35 | 0.4 GPU / 3.5 wall (448×280) | 1.0 GPU / 3.0 wall | 412.9 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 5 primitives | 1280×800 | 1 | 1.0 GPU / 2.8 wall (1280×800) | 0.9 GPU / 2.6 wall | 20.5 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 10 primitives | 1280×800 | 0.35 | 1.1 GPU / 2.9 wall (448×280) | 3.6 GPU / 4.6 wall | 670.1 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 10 primitives | 1280×800 | 1 | 3.9 GPU / 4.7 wall (1280×800) | 3.2 GPU / 4.1 wall | 22.2 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 1 TPMS-in-box | 1280×800 | 0.35 | 0.8 GPU / 2.8 wall (448×280) | 3.1 GPU / 3.9 wall | 338.9 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 1 TPMS-in-box | 1280×800 | 1 | 3.6 GPU / 4.3 wall (1280×800) | 2.6 GPU / 3.5 wall | 14.8 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 3 TPMS-in-box | 1280×800 | 0.35 | 2.1 GPU / 3.0 wall (448×280) | 7.6 GPU / 8.5 wall | 1209.7 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | P01.4 | 3 TPMS-in-box | 1280×800 | 1 | 8.7 GPU / 9.4 wall (1280×800) | 7.6 GPU / 8.6 wall | 30.1 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+
+P01.4 rows: the conditions are under *Against object count (P01 T4)* below.
 
 P00.5 conditions: `scripts/measure_viewport.py --field-view …` at commit 53c6cb6, Windows 10,
 GeForce GTX 1050 Ti/PCIe/SSE2, driver 441.93 (GL 3.3.0), Qt 6.8.3 msvc2022_64, MSVC 14.44,
@@ -157,8 +171,11 @@ display's refresh.
 
 ## Against object count (P01 T4)
 
-**Pending: the owner's run on the GTX 1050 Ti.** The rows go in the first table above, with
-unit `P01.4`, and the growth lines in the table below.
+The owner ran `scripts/measure_viewport.py --objects` on the GTX 1050 Ti on 2026-10-12.
+Its twelve rows are in the first table above (unit `P01.4`). The raw JSON is
+`02-measurements-p01.jsonl`. Conditions: commit b011b24 (the build matched; the pull to it
+changed no C++), Windows 10 (10.0.19045), GeForce GTX 1050 Ti/PCIe/SSE2, driver 441.93
+(GL 3.3.0), Qt 6.8.3, mains power, the editor closed during the run, no PRIME.
 
 Scenes, written by `scripts/measure_viewport.py --objects`, one graph file per object, so
 each is one object of a scene lowered to one shader (`../design/03-scene-lowering.md`):
@@ -175,8 +192,30 @@ count, over the counts of one family.
 
 | Date | Family | Preview scale | Per added object, moving GPU / wall ms | Per added object, settled GPU / wall ms | Commit, OS, driver |
 |---|---|---|---|---|---|
+| 2026-10-12 | primitives (1, 3, 5, 10) | 0.35 | +0.10 / −0.10 | +0.34 / +0.12 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | primitives (1, 3, 5, 10) | 1.0 | +0.37 / +0.15 | +0.28 / +0.17 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | TPMS-in-box (1, 3) | 0.35 | +0.61 / +0.10 | +2.28 / +2.29 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
+| 2026-10-12 | TPMS-in-box (1, 3) | 1.0 | +2.58 / +2.55 | +2.49 / +2.52 | b011b24, Windows 10, 3.3.0 NVIDIA 441.93 |
 
-Development box only, to check the tooling, not a performance figure (E-04): llvmpipe
+Findings (P01 T4):
+- **The frame time grows with the object count.** At 1.0, settled GPU ms: primitives
+  0.59 / 1.06 / 0.87 / 3.16 for 1 / 3 / 5 / 10 objects, about **+0.29 ms per added
+  primitive**; TPMS-in-box 2.64 / 7.62 for 1 / 3, about **+2.5 ms per added box**. The
+  5-primitive row is below the 3-primitive row: the owner reads it as noise, the frames
+  being under 1.1 ms.
+- **E-23 is triggered.** Its threshold, decided 2026-10-12 (`../decisions/03-deferred.md`),
+  is any clear slope. Both families show one, and the TPMS slope is about one TPMS object's
+  own cost per added object: without culling every step evaluates every object.
+- **Headroom.** The worst scene, 3 TPMS-in-box, takes 7.6–8.7 GPU / 8.6–9.4 wall ms at 1.0,
+  under 16 ms. Ten primitives take 3.2–3.9 GPU / 4.1–4.7 wall ms. The moving wall time at
+  0.35 stays at 2.8–4.1 ms for every scene: the fixed per-frame cost P00 T5 saw, not the
+  trace.
+- **The cold compile grows with the object count.** Each scene's first run (at 0.35) is a
+  cold compile: 157 / 265 / 413 / 670 ms for 1 / 3 / 5 / 10 primitives (about +57 ms per
+  primitive), 339 / 1210 ms for 1 / 3 TPMS-in-box. The second run, from the driver's cache,
+  takes 14–30 ms. This bears on E-21 (asynchronous compile).
+
+Before the owner's run, on the development box only, to check the tooling, not a performance figure (E-04): llvmpipe
 (Mesa 26.0.8, LLVM 21.1.8), 160×100, 4 frames, commit 2c9de42 plus the script change.
 Settled GPU ms: primitives 1.8 / 4.3 / 4.0 / 15.3 for 1 / 3 / 5 / 10, TPMS-in-box 22.4 / 61.5
 for 1 / 3. Per added object at 1.0, settled GPU: primitives +1.57 ms, TPMS-in-box +20.2 ms.

@@ -2,15 +2,22 @@
 
 ## Current focus
 
-**Now: P01, scene and picking (Spike B, `../../plan/20_P01_scene_and_picking.md`).** E-07
+**Now: P02, go or no-go (`../../plan/30_P02_go_no_go.md`).** It decides from the GTX 1050 Ti
+measurements of P00 and P01 (`02-measurements.md`) whether the editor goes on, and which
+deferred items the numbers trigger. E-23 (bounding-box culling) is already triggered by P01.
+
+Done: P01, scene and picking, Spike B (`../../plan/20_P01_scene_and_picking.md`). E-07
 is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
 in its own colour, and visibility and colour are uniforms (`../design/03-scene-lowering.md`).
 `--snapshot` and `--bench` take several graphs. T2 is done: the window holds a scene, a
 drop adds an object, and the Objects dock shows, hides, selects and deletes objects. T3 is
 done: a click in the viewport selects the nearest object along the ray (a CPU pick), and the
-selection is highlighted in the viewport and the dock. T4 is waiting on the owner: `scripts/measure_viewport.py --objects`
-times scenes of 1 to 10 objects on the GTX 1050 Ti (`02-measurements.md` § Against object
-count). Its growth per added object says whether E-23 (bounding-box culling) is triggered.
+selection is highlighted in the viewport and the dock. The owner checked it on the laptop.
+T4 is done: the owner measured scenes of 1 to 10 objects on the GTX 1050 Ti with
+`scripts/measure_viewport.py --objects` (`02-measurements.md` § Against object count). Each
+added primitive costs about +0.29 ms and each added TPMS-in-box about +2.5 ms of settled
+GPU time at 1280×800. The worst scene, 3 TPMS-in-box, stays under 9.4 ms. E-23 is
+triggered. P01 is closed.
 
 Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
 sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches
@@ -25,10 +32,11 @@ the moving frame time is within about 10% on the like-for-like rows. P00 is clos
 
 ## Next up
 
-P01 (above). P02 then decides go or no-go from the GTX 1050 Ti measurements.
+P02 (above): go or no-go from the GTX 1050 Ti measurements.
 
 ## Files
 
 - `01-feasibility.md` — the 2026-10-09 analysis: what DualC already provides, the blockers, the expected performance.
 - `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00 and P01.
 - `02-measurements-p00.jsonl` — the raw `--bench` output of the owner's two P00.5 runs on the GTX 1050 Ti (2026-10-10).
+- `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).

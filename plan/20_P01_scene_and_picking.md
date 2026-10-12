@@ -79,8 +79,10 @@ Scenes:
 *Notes (2026-10-12, T4).* `scripts/measure_viewport.py --objects` writes and times the six
 scenes (primitives in a fixed 5×2 grid, TPMS-in-box 5 apart, none overlapping) at 0.35 and
 1.0, and prints the ms per added object. The scenes and the checklist are in
-`docs/roadmap/02-measurements.md` § Against object count. The owner's numbers are pending
-(`HANDOFF_P01_TASK4.md`).
+`docs/roadmap/02-measurements.md` § Against object count. The owner ran it on the GTX on
+2026-10-12: about +0.29 ms per added primitive and +2.5 ms per added TPMS-in-box (settled
+GPU, 1.0), so E-23 is triggered (its threshold: any clear slope). Raw JSON in
+`docs/roadmap/02-measurements-p01.jsonl` (`HANDOFF_P01_TASK4.md`).
 
 ## Exit criteria
 - Tasks T1 to T4 are met. `python scripts/check.py` is green.

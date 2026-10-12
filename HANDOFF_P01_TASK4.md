@@ -1,10 +1,11 @@
 # Handoff — P01 T4: frame time against object count (human check)
 
-Date: 2026-10-12. Plan: `plan/20_P01_scene_and_picking.md` § T4. DualC pin: `2fcb6ee` (unchanged).
+Date: 2026-10-12 (two sessions). Plan: `plan/20_P01_scene_and_picking.md` § T4. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: blocked on the owner's run.** The tooling is done and checked on this box. The
-numbers must come from the GTX 1050 Ti (E-04), so T4's acceptance criteria and the phase's
-exit criteria cannot close until Giacomo runs the checklist and sends the output back.
+**Status: done.** The owner ran `scripts/measure_viewport.py --objects` on the GTX 1050 Ti
+(Windows 10, driver 441.93, commit b011b24). The twelve rows and the growth per added object
+are in `docs/roadmap/02-measurements.md`, and the raw JSON is
+`docs/roadmap/02-measurements-p01.jsonl`. **E-23 is triggered.** P01 is closed.
 
 ## What changed and why
 
@@ -26,13 +27,55 @@ exit criteria cannot close until Giacomo runs the checklist and sends the output
   - `--keep` prints the scratch folder, so the owner can open the scenes in the window.
   - Without `--objects` the P00 run is unchanged.
 - **Docs.**
-  - `docs/roadmap/02-measurements.md` § Against object count (P01 T4): the scenes, an
-    empty growth table, the llvmpipe tool check, and a three-step checklist.
+  - `docs/roadmap/02-measurements.md`: the twelve P01.4 rows in the first table, and
+    § Against object count (P01 T4) with the conditions, the scenes, the growth table,
+    the findings, the llvmpipe tool check and a three-step checklist.
+  - `docs/roadmap/02-measurements-p01.jsonl` (new, indexed): the owner's raw JSON lines.
+  - `docs/decisions/03-deferred.md` § E-23: the owner's threshold (any clear slope,
+    committed by the owner as 8f23e06) and the line that it fired.
   - `docs/command_reference/01-viewport.md` § Measurement run: `--objects`.
-  - `docs/roadmap/README.md`: current focus. It still names P02 (exit criterion).
+  - `docs/roadmap/README.md`: current focus is now P02. P01 is under *Done*.
   - `plan/20_P01_scene_and_picking.md`: T4 notes.
 
 No C++ changed. The ctests are the T3 set.
+
+## Measured on the reference GPU (owner, 2026-10-12)
+
+Conditions: the owner's laptop, Windows 10 (10.0.19045), GeForce GTX 1050 Ti/PCIe/SSE2,
+driver 441.93 (GL 3.3.0), Qt 6.8.3, Release build at b011b24 (the pull to it changed no
+C++), mains power, the editor closed during the run, traced 1280×800, 60 frames per phase,
+nothing selected. Medians of `GL_TIME_ELAPSED` (GPU) and of the time between presented
+frames (wall).
+
+| Scene | Settled GPU / wall ms at 1.0 | Moving GPU / wall ms at 0.35 (448×280) |
+|---|---|---|
+| 1 primitive | 0.59 / 2.67 | 0.21 / 4.06 |
+| 3 primitives | 1.06 / 2.6 | 0.3 / 3.0 |
+| 5 primitives | 0.87 / 2.6 | 0.4 / 3.5 |
+| 10 primitives | 3.16 / 4.1 | 1.1 / 2.9 |
+| 1 TPMS-in-box | 2.64 / 3.5 | 0.8 / 2.8 |
+| 3 TPMS-in-box | 7.62 / 8.6 | 2.1 / 3.0 |
+
+**Growth per added object** (least-squares slope, settled GPU / wall ms):
+- primitives (1, 3, 5, 10): **+0.28 / +0.17 at 1.0**, +0.34 / +0.12 at 0.35;
+- TPMS-in-box (1, 3): **+2.49 / +2.52 at 1.0**, +2.28 / +2.29 at 0.35.
+
+The owner's own reading: about +0.29 ms per primitive and +2.5 ms per TPMS box. The
+5-primitive row is below the 3-primitive row; the owner calls it noise, on frames under
+1.1 ms.
+
+**E-23: triggered.** The owner's threshold (answer of 2026-10-12, in
+`docs/decisions/03-deferred.md`) is any clear slope. Both families show one. A threshold of
+0.2 ms per primitive at 1.0 would also have fired (0.28–0.37 ms GPU).
+
+**Headroom.** The worst scene, 3 TPMS-in-box at 1.0, is 7.6–8.7 GPU / 8.6–9.4 wall ms,
+under 16 ms. The moving wall time at 0.35 is 2.8–4.1 ms for every scene: the fixed
+per-frame cost P00 T5 saw dominates, not the trace.
+
+**Cold compile.** Each scene's first run (at 0.35) compiled cold: 157 / 265 / 413 / 670 ms
+for 1 / 3 / 5 / 10 primitives, about +57 ms per primitive, and 339 / 1210 ms for 1 / 3
+TPMS-in-box. The second run (at 1.0), from the driver cache, took 14–30 ms. This is for P02
+to weigh against E-21 (asynchronous compile).
 
 ## Measured (development box, not the reference GPU)
 
@@ -69,43 +112,29 @@ every object is drawn, in its own colour, and none overlap.
   links and compiles unchanged, `03-scene-lowering.md` written and indexed.
 - **T2 met** (`HANDOFF_P01_TASK2.md`): two drops give two objects; show, hide, select and
   delete from the panel; command reference updated.
-- **T3 met** on the automatic checks (`HANDOFF_P01_TASK3.md`, `pick` ctest). Its own human
-  look (highlight colours, click versus drag) is still asked for, below.
-- **T4 not met**: the rows are not in `02-measurements.md`, and the growth per added
-  object and the E-23 call need the GTX numbers. **This is the block.**
-- **`python scripts/check.py` is green**: checked before the commit.
-- **`docs/roadmap/README.md` names P02**: § Next up, "P02 then decides go or no-go from the
-  GTX 1050 Ti measurements". Unchanged and checked.
+- **T3 met** (`HANDOFF_P01_TASK3.md`, `pick` ctest). The owner checked it on the laptop
+  (2026-10-12): the front object is selected where two overlap, and a hidden object is
+  skipped by a click.
+- **T4 met**: the twelve rows are in `02-measurements.md` (unit P01.4), and the growth per
+  added object and the E-23 call are above.
+- **`python scripts/check.py` is green**: 12/12 ctests, run before the commit.
+- **`docs/roadmap/README.md` names P02**: § Current focus, "Now: P02, go or no-go", and
+  § Next up.
 
 ## Open
 
-- **The owner's run** (checklist in `02-measurements.md` § Against object count): on the
-  laptop, `python scripts/measure_viewport.py --objects` (Windows) or with `--prime`
-  (Linux). Paste back the `GPU: …` line, the twelve rows, the four growth lines and the raw
-  JSON. The next session fills the tables, states the growth per added object here, and
-  decides whether E-23 is triggered.
-- **What would trigger E-23.** Its trigger is "frame time grows with the number of
-  non-overlapping objects". The scenes do not overlap, so any clear slope does. I expect
-  one: the union evaluates every object at every step. A slope small next to the frame
-  (say, under 0.2 ms per primitive at 1.0) would argue for deferring it further; that line
-  is the owner's to draw.
-- The primitive scenes all lie in z = 0, so most rays meet at most one or two objects.
-  Culling would help those rays the most. A scene of objects stacked in depth is not
-  measured.
-- No mesh objects in these scenes (E-22's trigger, several mesh objects, is not measured
-  here).
+- **The primitive scenes all lie in z = 0**, so most rays meet one or two objects. A scene
+  of objects stacked in depth is not measured. Culling (E-23) would help the planar case
+  most.
+- **No mesh objects** in these scenes. E-22's trigger (several mesh objects) is not
+  measured here.
+- **The cold compile grows about 57 ms per primitive** on the GTX. With 10 TPMS objects it
+  could pass a few seconds. P02 weighs it against E-21.
 
-## For the next unit
+## For the next unit (P02)
 
-- When the numbers come, the 02-measurements rows can be pasted as printed. The growth
-  lines go in the *Per added object* table (one row per family and scale). The raw JSON can
-  be committed beside `02-measurements-p00.jsonl` as `02-measurements-p01.jsonl`, and
-  indexed in `docs/roadmap/README.md`.
-- P02 reads these to decide go or no-go and which of E-21, E-22, E-23 the numbers trigger.
-
-## Human check asked
-
-1. The T4 checklist above, on the GTX 1050 Ti.
-2. T3's human look, still open (`HANDOFF_P01_TASK3.md` § Human check asked): the amber
-   highlight and dimming, click versus drag feel, overlap picking.
-3. Optional: open the ten primitives in the window (`--keep`) and orbit at 0.35 and 1.0.
+- `02-measurements.md` now holds both phases' rows. P02's note cites them, not this file.
+- E-23 is triggered; P02 records the triggers in `docs/decisions/03-deferred.md` and plans
+  the culling.
+- `measure_viewport.py --objects` can re-measure after E-23 lands: same scenes, same
+  growth lines, so the slope before and after compares directly.
