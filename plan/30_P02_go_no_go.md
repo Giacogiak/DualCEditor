@@ -22,5 +22,12 @@ Update `docs/decisions/03-deferred.md` for every trigger that fired.
 - The handoff lists the plan edits the note proposes. They are not applied: the owner
   approves them at this phase's gate.
 
+#### Notes (P02.1, 2026-10-12)
+- Written: `docs/roadmap/03-go-no-go.md`, verdict **go**. E-21 fired (second clause),
+  E-23 fired at P01.4 and is planned, E-22 not measured. Six plan edits proposed, none
+  applied (`HANDOFF_P02_TASK1.md`).
+- The feasibility note gives no number for "interactive"; the note reads it as at most
+  33 ms per moving frame, for the owner to confirm.
+
 ## Exit criteria
 - T1 is met, and the owner has approved the note before P03 starts.

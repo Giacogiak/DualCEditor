@@ -4,7 +4,12 @@
 
 **Now: P02, go or no-go (`../../plan/30_P02_go_no_go.md`).** It decides from the GTX 1050 Ti
 measurements of P00 and P01 (`02-measurements.md`) whether the editor goes on, and which
-deferred items the numbers trigger. E-23 (bounding-box culling) is already triggered by P01.
+deferred items the numbers trigger. T1 is written: `03-go-no-go.md` says **go**. Every
+analytic and one-mesh scene measured orbits at 0.35–0.5 well inside 16.7 ms and settles in
+under 10 ms; the tapered octet misses (81–128 ms moving), as the feasibility note expected,
+and `dualc_field_view` is no faster on it. E-23 (culling) and E-21 (async compile) are
+triggered; E-22 is not measured. The note proposes plan edits for P03–P06. **Waiting for
+the owner's approval** at P02's gate before P03 starts.
 
 Done: P01, scene and picking, Spike B (`../../plan/20_P01_scene_and_picking.md`). E-07
 is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
@@ -32,7 +37,8 @@ the moving frame time is within about 10% on the like-for-like rows. P00 is clos
 
 ## Next up
 
-P02 (above): go or no-go from the GTX 1050 Ti measurements.
+The owner approves or amends `03-go-no-go.md` and its plan edits. Then P03, which also
+waits on E-08 (or first the proposed P07, render scaling, if the owner takes option 1a).
 
 ## Files
 
@@ -40,3 +46,4 @@ P02 (above): go or no-go from the GTX 1050 Ti measurements.
 - `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00 and P01.
 - `02-measurements-p00.jsonl` — the raw `--bench` output of the owner's two P00.5 runs on the GTX 1050 Ti (2026-10-10).
 - `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).
+- `03-go-no-go.md` — P02's verdict from the measurements: what met the feasibility target, what missed, the deferred items triggered, and the plan edits proposed for P03–P06.
