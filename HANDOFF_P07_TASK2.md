@@ -96,3 +96,18 @@ is a human check (below, and P07 T3).
   a compile. A structural edit goes through `MainWindow::apply` → `buildScene`. Code that
   needs the new scene must wait for `sceneApplied` / `loadFinished`, not read it right
   after the call.
+
+## Owner's GTX run at 4b89008 (Giacomo, 2026-10-13)
+
+GL 3.3.0 NVIDIA 441.93, Qt 6.8.3, Windows 10, Release. Bundle kept in `.plan-run/` (not tracked);
+its README has the details.
+- **Live window:** with 2 TPMS-in-box open, a third `tpms_box_2.fld` dropped in. The window kept
+  orbiting during the compile, showed `compile …`, then the compile ms. Owner verdict: all good.
+  The compile ms figure was not written down; the driver's disk cache most likely served it,
+  so it is not a cold figure. The cold figure is P07.3's.
+- **`async_compile`** passes, 17/17 checks. Frames during the 400 ms build: 19 (full ctest run,
+  nothing else open), 8 in the verbose re-run (a live window was open beside it).
+- **ctest 12/13.** `main_window` still fails the same check (`tests/main_window_test.cpp:220`) on
+  the GTX, at 4b89008 as at every earlier commit. It is the open item from P07.1, untouched here.
+
+Owner's acceptance of P07.2: the window stays responsive during an async compile on the GTX.
