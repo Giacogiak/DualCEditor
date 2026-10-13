@@ -5,8 +5,9 @@
 **The plan is done (2026-10-13).** Every phase in `../../plan/README.md` (P00 to P07) has
 run, and P06 was the last. No phase is next until the owner adds one. Still open: the GTX
 checks queued for the owner's next laptop session (P03, P04, P05, and P06's export timings),
-E-28's verdict (`../decisions/03-deferred.md`), the cold-compile question and the
-`main_window` failure on the GTX, both below.
+gathered as one checklist in `04-gtx-batch-2026-10-13.md`; E-28's verdict
+(`../decisions/03-deferred.md`); the cold-compile question and the `main_window` failure
+on the GTX, both below and both in that checklist's last section.
 
 Done: P06, export (`../../plan/70_P06_export.md`, `../../HANDOFF_P06_TASK1.md`).
 `File ▸ Export Selected Object…` (`Ctrl+E`) and `Export Visible Scene…` (`Ctrl+Shift+E`)
@@ -115,3 +116,4 @@ P03, once E-08 is decided (`../decisions/02-open.md`).
 - `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).
 - `02-measurements-p07.jsonl` — the raw `--bench` output of the owner's GTX 1050 Ti runs of P07.1 (2026-10-13): the first 20 lines at dd92129 (culling all objects), the next 20 at 6f3a8bd (culling costly objects only, option C); and of P07.3: the last 20 at b163141, cold shader cache.
 - `03-go-no-go.md` — P02's verdict from the measurements: what met the feasibility target, what missed, the deferred items triggered, and the plan edits proposed for P03–P06.
+- `04-gtx-batch-2026-10-13.md` — the one laptop session that clears the GTX checks queued by P03–P06 (and two older items): what to run at the newest commit, what is expected, where the answers are filed.
