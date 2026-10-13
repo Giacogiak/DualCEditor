@@ -160,3 +160,12 @@ target_link_libraries(mesh_solid_test PRIVATE dualceditor_core)
 dualceditor_target_options(mesh_solid_test)
 add_test(NAME mesh_solid
   COMMAND mesh_solid_test ${CMAKE_CURRENT_SOURCE_DIR}/data/meshes)
+
+# Booleans and smooth booleans (P05 T1): each operation's field equals DualC's
+# on the graph written by hand, folded left over three operands, non-metric
+# operands of a smooth boolean under normalize (E-10); undo restores the
+# operands. GL-free.
+add_executable(operations_test operations_test.cpp)
+target_link_libraries(operations_test PRIVATE dualceditor_core)
+dualceditor_target_options(operations_test)
+add_test(NAME operations COMMAND operations_test)

@@ -8,8 +8,9 @@
 
 // The Objects dock's contents: one row per scene object, in scene order, with
 // a visibility checkbox, a colour swatch and the object's name, followed for
-// an imported mesh by its kind, [mesh] or [winding]. One row at a
-// time is selected. Delete (QKeySequence::Delete) on the list asks to remove
+// an imported mesh by its kind, [mesh] or [winding]. Ctrl+click and
+// Shift+click select several rows; the panel keeps the order they were
+// selected in, which an operation takes its operands in (P05 T1). Delete (QKeySequence::Delete) on the list asks to remove
 // the selected object; F2 or a double click edits its name. Nothing here touches the scene or GL: the window acts
 // on the signals (docs/command_reference/01-viewport.md § Objects).
 class ObjectsPanel : public QListWidget {
@@ -25,9 +26,14 @@ class ObjectsPanel : public QListWidget {
   void setObjectVisible(int id, bool visible);
   void setObjectColour(int id, const SceneColour& colour);
 
-  // The id of the selected object, 0 for none; select 0 clears.
+  // The id of the selected object, the last selected of several, 0 for none;
+  // select selects it alone, and select 0 clears.
   int selectedId() const;
   void select(int id);
+  // The selected objects' ids in the order they were selected.
+  const std::vector<int>& selectedIds() const { return order_; }
+  // Select `ids` in that order, as Ctrl+clicks would.
+  void selectInOrder(const std::vector<int>& ids);
   // The kind shown after an imported object's name: "mesh" (watertight) or
   // "winding" (meshObjectKind), empty for another object.
   QString kind(int id) const;
@@ -41,6 +47,8 @@ class ObjectsPanel : public QListWidget {
  signals:
   void visibilityToggled(int id, bool visible);
   void selectionMoved(int id);  // 0: nothing selected
+  // The set or the order of the selected rows changed (selectedIds).
+  void selectionOrderChanged();
   void deleteRequested(int id);
   void renameRequested(int id, const QString& name);
 
@@ -48,5 +56,9 @@ class ObjectsPanel : public QListWidget {
   void keyPressEvent(QKeyEvent* event) override;
 
  private:
+  // Bring order_ up to the rows selected now: drop the ones no longer
+  // selected, append the new ones in row order.
+  void syncOrder();
   bool updating_ = false;  // rows being rebuilt or set: emit nothing
+  std::vector<int> order_;
 };

@@ -17,6 +17,7 @@
 #include "transform_panel.h"
 #include "viewport.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QDir>
 #include <QDoubleSpinBox>
@@ -581,6 +582,55 @@ int main(int argc, char* argv[]) {
               m.statusBar()->currentMessage().contains("cancelled"),
           "cancelled, it leaves the object and the history alone: " +
               m.statusBar()->currentMessage().toStdString());
+  }
+
+  // Booleans (P05 T1): two objects Ctrl+clicked in the Objects dock, the
+  // winding one first, give a smooth union in that order with the menu's k, the
+  // winding operand under normalize (E-10), which the step and the log name.
+  // The result is selected; undo shows the operands again.
+  {
+    MainWindow m(1.0f);
+    m.resize(800, 600);
+    m.show();
+    check(drop(m, tmp.filePath("closed.obj")) && nextLoad(m, 30000) == 1 &&
+              drop(m, tmp.filePath("open.obj")) && nextLoad(m, 30000) == 1,
+          "booleans: a closed and an open mesh load");
+    const std::vector<SceneObject> objs = m.scene().objects();
+    const int cube = objs.size() == 2 ? objs[0].id : 0, soup = objs.size() == 2 ? objs[1].id : 0;
+    QAction* smoothUnion = nullptr;
+    for (QAction* a : m.findChildren<QAction*>())
+      if (a->data().toString() == "smooth-union") smoothUnion = a;
+    m.objects()->selectInOrder({soup});
+    check(smoothUnion && !smoothUnion->isEnabled() && m.applyBoolean("union") == 0,
+          "one object selected: the booleans are off");
+    m.objects()->selectInOrder({soup, cube});
+    check(smoothUnion && smoothUnion->isEnabled() &&
+              m.objects()->selectedIds() == std::vector<int>{soup, cube},
+          "two objects selected, in selection order: the booleans are on");
+    m.setSmoothK(0.5);
+    if (smoothUnion) smoothUnion->trigger();
+    check(runUntil([&] { return m.scene().objects().size() == 3; }, 30000),
+          "the smooth union is on screen");
+    if (m.scene().objects().size() == 3) {
+      const SceneObject r = m.scene().objects().back();
+      check(r.graph.op == "smooth-union" && r.graph.params.count("k") &&
+                r.graph.params.at("k").num == 0.5 && r.graph.in.size() == 2 &&
+                r.graph.in[0].op == "normalize" && r.graph.in[0].in[0].op == "winding" &&
+                r.graph.in[1].op == "mesh",
+            "smooth-union(normalize(winding), mesh), k = 0.5 mm, in selection order");
+      check(r.operands == std::vector<int>{soup, cube}, "its operands, in order");
+      check(m.selectedObject() == r.id, "the new object is selected");
+      check(!m.scene().find(cube)->visible && !m.scene().find(soup)->visible,
+            "the operands are hidden");
+      check(m.undoStack()->undoText().contains("(normalize on open.obj)"),
+            "the step names the normalize: " + m.undoStack()->undoText().toStdString());
+      check(m.logText().contains("normalize on open.obj, not distance fields (E-10)"),
+            "the log names it too");
+      m.undoStack()->undo();
+      check(runUntil([&] { return m.scene().objects().size() == 2; }, 30000) &&
+                m.scene().find(cube)->visible && m.scene().find(soup)->visible,
+            "undo removes it and shows the operands again");
+    }
   }
 
   // The command-line argument, through --snapshot.

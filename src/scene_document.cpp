@@ -1,7 +1,10 @@
 #include "scene_document.h"
 
+#include "example_common.h"
+
 #include <QDir>
 #include <QFileInfo>
+#include <QStringList>
 #include <QUndoCommand>
 
 #include <algorithm>
@@ -192,8 +195,9 @@ class ReplaceGraph : public QUndoCommand {
 // takes the result out and shows the operands that were shown.
 class ApplyOperation : public QUndoCommand {
  public:
-  ApplyOperation(SceneDocument* doc, SceneObject result, int index, std::vector<int> hidden)
-      : QUndoCommand(QString("%1").arg(result.name)),
+  ApplyOperation(SceneDocument* doc, SceneObject result, int index, std::vector<int> hidden,
+                 const QString& text)
+      : QUndoCommand(text),
         doc_(doc),
         result_(std::move(result)),
         index_(index),
@@ -366,12 +370,19 @@ int SceneDocument::applyOperation(const std::string& op,
   SceneObject r;
   r.id = scene_.nextId();
   r.name = name.isEmpty() ? QString("%1 %2").arg(QString::fromStdString(op)).arg(r.id) : name;
-  r.graph = operationGraph(op, params, objects, &r.edits);
+  std::vector<std::size_t> normalized;
+  r.graph = operationGraph(op, params, objects, &r.edits, &normalized);
   r.meshDir = objects.front()->meshDir;
   r.operands = operands;
   r.colour = sceneColourFor(r.id);
   const int id = r.id;
-  push(new ApplyOperation(this, std::move(r), index, std::move(hidden)));
+  QString text = r.name;
+  if (!normalized.empty()) {
+    QStringList names;
+    for (std::size_t i : normalized) names << objects[i]->name;
+    text += QString(" (normalize on %1)").arg(names.join(", "));
+  }
+  push(new ApplyOperation(this, std::move(r), index, std::move(hidden), text));
   return id;
 }
 
@@ -423,24 +434,61 @@ void SceneDocument::flush() {
   emit changed(changes);
 }
 
+bool isBooleanOp(const std::string& op) {
+  dce::BoolOp bop;
+  return dce::parseBoolOp(op, bop);
+}
+
+bool isSmoothBooleanOp(const std::string& op) {
+  dce::BoolOp bop;
+  return dce::parseBoolOp(op, bop) &&
+         (bop == dce::BoolOp::SmoothUnion || bop == dce::BoolOp::SmoothIntersection ||
+          bop == dce::BoolOp::SmoothDifference);
+}
+
+bool isMetricGraph(const fg::GraphNode& graph) {
+  const std::string& op = graph.op;
+  if (op == "normalize") return true;
+  if (op == "winding" || op == "twist" || op == "bend" || op == "displace") return false;
+  for (const dce::TpmsKind& k : dce::tpmsKinds())
+    if (op == k.name) return false;
+  for (const fg::GraphNode& in : graph.in)
+    if (!isMetricGraph(in)) return false;
+  return true;
+}
+
 fg::GraphNode operationGraph(const std::string& op,
                              const std::map<std::string, fg::ParamValue>& params,
                              const std::vector<const SceneObject*>& operands,
-                             std::map<ParamKey, std::vector<float>>* edits) {
-  fg::GraphNode root;
-  root.op = op;
-  root.params = params;
+                             std::map<ParamKey, std::vector<float>>* edits,
+                             std::vector<std::size_t>* normalized) {
+  // A boolean takes two inputs: over more operands it folds left, in operand
+  // order, op(op(a, b), c). Operand 0 sits under n - 1 nested nodes.
+  const bool fold = isBooleanOp(op) && operands.size() > 2;
+  const bool smooth = isSmoothBooleanOp(op);
+  const std::size_t n = operands.size();
+  const auto operandAt = [&](std::size_t i) {
+    if (!fold) return "/root/in/" + std::to_string(i);
+    std::string at = "/root";
+    for (std::size_t j = 0; j + std::max<std::size_t>(i, 1) + 1 < n; ++j) at += "/in/0";
+    return at + (i == 0 ? "/in/0" : "/in/1");
+  };
   bool oneDir = true;
   for (const SceneObject* o : operands) oneDir = oneDir && o->meshDir == operands.front()->meshDir;
-  for (std::size_t i = 0; i < operands.size(); ++i) {
+  std::vector<fg::GraphNode> inputs;
+  for (std::size_t i = 0; i < n; ++i) {
     const SceneObject& o = *operands[i];
     fg::GraphNode graph = o.graph;
     if (!oneDir && !o.meshDir.isEmpty()) absoluteMeshPaths(graph, o.meshDir);
-    const std::string at = "/root/in/" + std::to_string(i);
+    const std::string at = operandAt(i);
     std::map<std::string, std::string> renamed;
-    // Outermost first: transform, then scale, each only when it moves something.
+    // Outermost first: normalize (E-10), transform, then scale, each only when
+    // it is needed.
+    const bool wrap = smooth && !isMetricGraph(o.graph);
     const bool moved = !isIdentity(o.transform), scaled = o.scale != 1.0;
     std::string inner = at;
+    if (wrap) inner += "/in/0";
+    const std::string transformAt = inner;
     if (moved) inner += "/in/0";
     const std::string scaleAt = inner;
     if (scaled) inner += "/in/0";
@@ -462,18 +510,44 @@ fg::GraphNode operationGraph(const std::string& op,
         for (int c = 0; c < 4; ++c) matrix.vec.push_back(o.transform.m[r][c]);
       t.params["matrix"] = std::move(matrix);
       t.in.push_back(std::move(graph));
-      t.pointer = at;
+      t.pointer = transformAt;
       graph = std::move(t);
     }
-    root.in.push_back(std::move(graph));
+    if (wrap) {
+      fg::GraphNode nn;
+      nn.op = "normalize";
+      nn.in.push_back(std::move(graph));
+      nn.pointer = at;
+      graph = std::move(nn);
+      if (normalized) normalized->push_back(i);
+    }
+    inputs.push_back(std::move(graph));
     if (!edits) continue;
     for (const auto& [key, value] : o.edits) {
       const auto it = renamed.find(key.first);
       if (it != renamed.end()) (*edits)[{it->second, key.second}] = value;
     }
   }
-  root.pointer = "/root";
-  return root;
+  if (!fold) {
+    fg::GraphNode root;
+    root.op = op;
+    root.params = params;
+    root.in = std::move(inputs);
+    root.pointer = "/root";
+    return root;
+  }
+  fg::GraphNode acc = std::move(inputs[0]);
+  for (std::size_t i = 1; i < n; ++i) {
+    fg::GraphNode node;
+    node.op = op;
+    node.params = params;
+    node.in.push_back(std::move(acc));
+    node.in.push_back(std::move(inputs[i]));
+    node.pointer = "/root";
+    for (std::size_t j = i + 1; j < n; ++j) node.pointer += "/in/0";
+    acc = std::move(node);
+  }
+  return acc;
 }
 
 bool sameGraph(const fg::GraphNode& a, const fg::GraphNode& b) {

@@ -80,7 +80,9 @@ class SceneDocument : public QObject {
   // An operation: a new object whose graph is `op` with `params` over the
   // operands' graphs, each in its own transform, in `operands` order. The
   // operands are hidden, not deleted (operationGraph). Returns the new id, 0
-  // when an operand is unknown.
+  // when an operand is unknown. The step is named after the new object; when
+  // a smooth boolean wraps operands in `normalize` (E-10), the step says so:
+  // "smooth-union 5 (normalize on bunny.stl)".
   int applyOperation(const std::string& op,
                      const std::map<std::string, dce::fieldgraph::ParamValue>& params,
                      const std::vector<int>& operands, QString name = {});
@@ -112,14 +114,28 @@ class SceneDocument : public QObject {
 // The graph of an operation over `operands` (scene objects): `op` with
 // `params`, whose inputs are each operand's graph wrapped in DualC's
 // `transform` node (none for an identity) over DualC's `scale` node (none for
-// a scale of 1). Every node gets a structural
+// a scale of 1). A boolean takes two inputs, so over more operands it folds
+// left in operand order, op(op(a, b), c), each node with `params`. A smooth
+// boolean wraps each operand that is not metric (isMetricGraph) in
+// `normalize`, outermost (E-10); `normalized`, when given, receives their
+// indices. Every node gets a structural
 // pointer ("/root", "/root/in/0", ...), and `edits`, when given, receives the
 // operands' parameter edits keyed by those pointers. A relative mesh path
 // becomes absolute when the operands resolve meshes in different folders.
 dce::fieldgraph::GraphNode operationGraph(
     const std::string& op, const std::map<std::string, dce::fieldgraph::ParamValue>& params,
     const std::vector<const SceneObject*>& operands,
-    std::map<ParamKey, std::vector<float>>* edits = nullptr);
+    std::map<ParamKey, std::vector<float>>* edits = nullptr,
+    std::vector<std::size_t>* normalized = nullptr);
+
+// One of DualC's boolean tokens (union, intersection, difference, xor and the
+// smooth-* three), and the smooth ones alone.
+bool isBooleanOp(const std::string& op);
+bool isSmoothBooleanOp(const std::string& op);
+// Whether `graph` is a distance field DualC's smooth booleans can blend: false
+// when it holds a `winding`, a TPMS source or a twist, bend or displace that no
+// `normalize` above re-normalises (E-10, DualC's `--list`).
+bool isMetricGraph(const dce::fieldgraph::GraphNode& graph);
 
 // Two graphs equal node for node: op, params, inputs and pointers.
 bool sameGraph(const dce::fieldgraph::GraphNode& a, const dce::fieldgraph::GraphNode& b);

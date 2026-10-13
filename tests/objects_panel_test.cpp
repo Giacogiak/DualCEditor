@@ -210,6 +210,33 @@ int main(int argc, char* argv[]) {
   check(vp.selectedObject() == cId && vp.grabFramebuffer() != three,
         "a row selected in the panel is highlighted in the viewport");
 
+  // Ctrl+click adds a row to the selection and keeps the order (P05 T1): c,
+  // then a; the last one is the selected object. Ctrl+click on c drops it.
+  {
+    const int aId = idAt(w, 0);
+    const auto click = [&](int id, Qt::KeyboardModifiers modifiers) {
+      const QPoint at = panel.visualItemRect(panel.row(id)).center();
+      for (QEvent::Type type : {QEvent::MouseButtonPress, QEvent::MouseButtonRelease}) {
+        QMouseEvent e(type, QPointF(at), panel.viewport()->mapToGlobal(QPointF(at)),
+                      Qt::LeftButton, type == QEvent::MouseButtonPress ? Qt::LeftButton : Qt::NoButton,
+                      modifiers);
+        QApplication::sendEvent(panel.viewport(), &e);
+      }
+    };
+    const auto ctrlClick = [&](int id) { click(id, Qt::ControlModifier); };
+    ctrlClick(aId);
+    check(panel.selectedIds() == std::vector<int>{cId, aId} && w.selectedObject() == aId,
+          "Ctrl+click adds a row, in selection order");
+    ctrlClick(cId);
+    check(panel.selectedIds() == std::vector<int>{aId} && w.selectedObject() == aId,
+          "Ctrl+click on a selected row drops it");
+    ctrlClick(cId);
+    click(cId, Qt::NoModifier);
+    check(panel.selectedIds() == std::vector<int>{cId} && w.selectedObject() == cId,
+          "a plain click on c selects it alone");
+    quiet(vp);
+  }
+
   // Click to select (P01 T3): a click on b's pixels selects b, in the panel
   // too; a click on the background clears the selection. Neither links.
   {

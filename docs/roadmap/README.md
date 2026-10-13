@@ -2,7 +2,13 @@
 
 ## Current focus
 
-**Done: P04, import (`../../plan/50_P04_import.md`).** E-09 is decided (OBJ, PLY and STL;
+**Now: P05, operations (`../../plan/60_P05_operations.md`).** T1 is done
+(`../../HANDOFF_P05_TASK1.md`): `Operations ▸ Union … Smooth Difference` on the objects
+Ctrl+clicked in the Objects dock, in that order, folded left over more than two, with a
+`Blend k` in mm; non-metric operands of a smooth boolean go under `normalize` (E-10). Next:
+T2, the TPMS and strut-lattice fills.
+
+Done: P04, import (`../../plan/50_P04_import.md`). E-09 is decided (OBJ, PLY and STL;
 3MF deferred). T1, the mesh readers (`../design/07-mesh-import.md`,
 `../../HANDOFF_P04_TASK1.md`); T2, import as a solid (`../../HANDOFF_P04_TASK2.md`): a
 dropped mesh becomes a `mesh` object when DualC finds it watertight and it is oriented,

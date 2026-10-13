@@ -38,7 +38,7 @@ QIcon swatch(const SceneColour& colour) {
 }  // namespace
 
 ObjectsPanel::ObjectsPanel(QWidget* parent) : QListWidget(parent) {
-  setSelectionMode(QAbstractItemView::SingleSelection);
+  setSelectionMode(QAbstractItemView::ExtendedSelection);
   setUniformItemSizes(true);
   setItemDelegate(new KindDelegate(this));
   connect(this, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
@@ -55,7 +55,10 @@ ObjectsPanel::ObjectsPanel(QWidget* parent) : QListWidget(parent) {
     emit visibilityToggled(id, item->checkState() == Qt::Checked);
   });
   connect(this, &QListWidget::itemSelectionChanged, this, [this] {
-    if (!updating_) emit selectionMoved(selectedId());
+    syncOrder();
+    if (updating_) return;
+    emit selectionOrderChanged();
+    emit selectionMoved(selectedId());
   });
 }
 
@@ -68,6 +71,7 @@ QColor ObjectsPanel::swatchColour(const SceneColour& colour) {
 
 void ObjectsPanel::setObjects(const std::vector<SceneObject>& objects) {
   const int selected = selectedId();
+  const std::vector<int> order = order_;
   updating_ = true;
   clear();
   for (const SceneObject& o : objects) {
@@ -85,9 +89,13 @@ void ObjectsPanel::setObjects(const std::vector<SceneObject>& objects) {
                                       "is the winding number. Edit > Make Watertight")
                                   .arg(o.id)
                             : QString("object %1").arg(o.id));
-    if (o.id == selected) item->setSelected(true);
+    if (std::find(order.begin(), order.end(), o.id) != order.end()) item->setSelected(true);
   }
+  order_.clear();
+  for (int id : order)
+    if (row(id)) order_.push_back(id);
   updating_ = false;
+  if (order_ != order) emit selectionOrderChanged();
   if (selectedId() != selected) emit selectionMoved(selectedId());
 }
 
@@ -107,18 +115,42 @@ void ObjectsPanel::setObjectColour(int id, const SceneColour& colour) {
   updating_ = false;
 }
 
-int ObjectsPanel::selectedId() const {
-  const QList<QListWidgetItem*> items = selectedItems();
-  return items.isEmpty() ? 0 : items.first()->data(kIdRole).toInt();
-}
+int ObjectsPanel::selectedId() const { return order_.empty() ? 0 : order_.back(); }
 
 void ObjectsPanel::select(int id) {
   if (QListWidgetItem* item = row(id)) {
-    setCurrentItem(item);
-    item->setSelected(true);
+    setCurrentItem(item, QItemSelectionModel::ClearAndSelect);
   } else {
     clearSelection();
   }
+}
+
+void ObjectsPanel::selectInOrder(const std::vector<int>& ids) {
+  updating_ = true;
+  clearSelection();
+  std::vector<int> order;
+  for (int id : ids)
+    if (QListWidgetItem* item = row(id)) {
+      setCurrentItem(item, QItemSelectionModel::Select);
+      order.push_back(id);
+    }
+  order_ = order;
+  updating_ = false;
+  emit selectionOrderChanged();
+  emit selectionMoved(selectedId());
+}
+
+void ObjectsPanel::syncOrder() {
+  std::vector<int> selected;
+  for (int i = 0; i < count(); ++i)
+    if (item(i)->isSelected()) selected.push_back(item(i)->data(kIdRole).toInt());
+  const auto chosen = [&](int id) {
+    return std::find(selected.begin(), selected.end(), id) != selected.end();
+  };
+  order_.erase(std::remove_if(order_.begin(), order_.end(), [&](int id) { return !chosen(id); }),
+               order_.end());
+  for (int id : selected)
+    if (std::find(order_.begin(), order_.end(), id) == order_.end()) order_.push_back(id);
 }
 
 QString ObjectsPanel::kind(int id) const {

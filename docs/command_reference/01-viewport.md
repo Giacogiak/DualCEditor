@@ -186,6 +186,7 @@ the pointer is a character offset.
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
+| `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference`, and the `Blend k` spin box of the smooth ones. Greyed out with fewer than two objects selected. No shortcut. See *Booleans* below. |
 | `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
@@ -209,7 +210,9 @@ name; the tooltip gives the object id).
 | Input | Effect |
 |---|---|
 | Click the checkbox (or `Space` on the selected row) | Hide or show the object. One uniform (`u_o<id>_visible`): no recompile, no relink, and showing it again gives the same image. A hidden object is not traced and not coloured; the trace box stays the same. |
-| Click a row, arrow keys | Select that object. One at a time. The viewport highlights it (below). |
+| Click a row, arrow keys | Select that object alone. The viewport highlights it (below). |
+| `Ctrl`+click a row | Add it to the selection, or drop it when it is selected. The dock keeps the order rows were selected in: a boolean takes its operands in that order. The last one selected is the selected object (the Transform dock, the gizmo, the highlight). |
+| `Shift`+click a row | Select the rows between the current one and it, added in row order. |
 | Left click in the viewport | Select the object under the cursor: the nearest along the view ray where objects overlap on screen. A click on the background clears the selection. Its row is selected in this dock. Hidden objects are not picked. |
 
 The selected object is tinted toward amber (mix 0.45 with (1.0, 0.78, 0.20), before the
@@ -226,6 +229,38 @@ new scene, so ids and colours start again. There is no colour picker yet: edit t
 object's `colour` in the Parameters dock, and the swatch follows. Unchecking `visible`
 there (0) checks the box off too.
 
+## Booleans
+
+Select two objects or more in the Objects dock (`Ctrl`+click, in order), then pick an
+entry of the `Operations` menu. The result is a new object, named `<op> <id>`, over copies
+of the operands, each in its own pose. The operands are hidden, not deleted. The new
+object is selected once its shader links.
+
+| Entry | DualC op | Result over `a, b` |
+|---|---|---|
+| `Union` | `union` | `a` or `b` |
+| `Intersection` | `intersection` | `a` and `b` |
+| `Difference` | `difference` | `a` minus `b`: the first selected minus the second |
+| `Xor` | `xor` | in one but not both |
+| `Smooth Union` | `smooth-union` | `union` blended over the width `k` |
+| `Smooth Intersection` | `smooth-intersection` | `intersection` blended over `k` |
+| `Smooth Difference` | `smooth-difference` | `difference` blended over `k` |
+
+- **More than two operands** fold left in selection order: `a, b, c` gives
+  `op(op(a, b), c)`, so `Difference` cuts `b` and `c` out of `a`.
+- **`Blend k`** is in millimetres, 0.25 by default (DualC's default), from 0.001 to 1000.
+  It is read when the entry is picked; changing it later does not change a result.
+  The sharp booleans ignore it.
+- **Any object** can be an operand: a primitive, a TPMS or lattice graph, an imported
+  `[mesh]` or `[winding]`, the result of an earlier boolean.
+- **Non-metric operands (E-10).** A smooth boolean blends distances, so it misbehaves on a
+  field that is not one: a `[winding]` mesh, a raw TPMS (`gyroid`, …), or a `twist`,
+  `bend` or `displace`, with no `normalize` above them. Such an operand goes under
+  `normalize` in the result's graph. The undo step says so, as
+  `smooth-union 7 (normalize on bunny.stl)`, and the log and status bar read
+  `smooth-union of bunny.stl, ball.json, k 0.25 mm; normalize on bunny.stl, not distance
+  fields (E-10)`. A sharp boolean takes every operand as it is.
+
 ## Undo and redo
 
 Every change to the scene is one step on an undo stack (`../design/04-scene-model.md`):
@@ -234,6 +269,7 @@ Every change to the scene is one step on an undo stack (`../design/04-scene-mode
 |---|---|
 | Add (`File ▸ Add…`, a drop, a later command-line graph, an imported mesh) | Removes the object. Its id is not given to the next add. |
 | `Edit ▸ Make Watertight` | The `[winding]` object comes back. |
+| A boolean (`Operations` menu) | Removes the result and shows the operands that were shown. |
 | Delete | Puts the object back at its place, with its id, colour, name and parameter edits. |
 | Rename, show or hide, an edit of `colour` or `matrix` in the Parameters dock | The old value; one uniform, no recompile, no relink. |
 | A parameter edit | The old value; one uniform. Steps of one spin box in a row are one step. |

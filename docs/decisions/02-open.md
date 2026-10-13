@@ -66,3 +66,8 @@ booleans misbehave on them unless wrapped in `normalize`.
 
 **Decided (Giacomo, 2026-10-13):** wrap automatically, the recommended option. Delegated to
 the plan's recommendation, as E-08.
+
+Implemented in P05 T1 (`../design/04-scene-model.md` § Operations): an operand of a smooth
+boolean whose graph holds a `winding`, a TPMS source, or a `twist`, `bend` or `displace`
+with no `normalize` above goes under `normalize`. A `mesh` is not wrapped. The undo step
+names the wrapped operands.

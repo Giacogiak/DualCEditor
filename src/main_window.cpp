@@ -20,6 +20,7 @@
 #include <QFile>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QHBoxLayout>
 #include <QKeySequence>
 #include <QLabel>
 #include <QMenuBar>
@@ -28,6 +29,7 @@
 #include <QPointer>
 #include <QProgressDialog>
 #include <QThread>
+#include <QWidgetAction>
 #include <QStatusBar>
 #include <QUndoStack>
 #include <QUrl>
@@ -211,6 +213,39 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     makeWatertight(selected_);
   });
   watertightAction_->setEnabled(false);
+  // Booleans (P05 T1), on two or more objects selected in the Objects dock.
+  QMenu* opMenu = menuBar()->addMenu("&Operations");
+  const auto addBoolean = [&](const char* text, const char* op) {
+    QAction* a = opMenu->addAction(text, this, [this, op] { applyBoolean(op); });
+    a->setData(QString(op));
+    a->setEnabled(false);
+    booleanActions_.push_back(a);
+  };
+  addBoolean("&Union", "union");
+  addBoolean("&Intersection", "intersection");
+  addBoolean("&Difference", "difference");
+  addBoolean("&Xor", "xor");
+  opMenu->addSeparator();
+  addBoolean("Smooth U&nion", "smooth-union");
+  addBoolean("Smooth In&tersection", "smooth-intersection");
+  addBoolean("Smooth Di&fference", "smooth-difference");
+  auto* kRow = new QWidget(opMenu);
+  auto* kLayout = new QHBoxLayout(kRow);
+  kLayout->setContentsMargins(8, 2, 8, 2);
+  kLayout->addWidget(new QLabel("Blend k", kRow));
+  smoothK_ = new QDoubleSpinBox(kRow);
+  smoothK_->setObjectName("smoothK");
+  smoothK_->setDecimals(3);
+  smoothK_->setRange(0.001, 1000.0);
+  smoothK_->setSingleStep(0.05);
+  smoothK_->setValue(0.25);  // DualC's default k
+  smoothK_->setSuffix(" mm");
+  smoothK_->setToolTip("The blend width of the smooth booleans, in mm (DualC's k)");
+  kLayout->addWidget(smoothK_);
+  auto* kAction = new QWidgetAction(opMenu);
+  kAction->setDefaultWidget(kRow);
+  opMenu->addAction(kAction);
+  connect(objects_, &ObjectsPanel::selectionOrderChanged, this, &MainWindow::updateObjectActions);
   QMenu* viewMenu = menuBar()->addMenu("&View");
   viewMenu->addAction(objectsDock->toggleViewAction());
   viewMenu->addAction(transformDock->toggleViewAction());
@@ -232,6 +267,7 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     commit(std::move(p));
   });
   connect(viewport_, &Viewport::sceneFailed, this, [this](const QString& error) {
+    selectAfter_ = 0;
     if (!pending_) return showTiming();
     const Pending p = std::move(*pending_);
     pending_.reset();
@@ -452,6 +488,48 @@ void MainWindow::updateObjectActions() {
   const SceneObject* o = document_.scene().find(selected_);
   watertightAction_->setEnabled(!job_ && o && doc_.scene.find(selected_) &&
                                 meshObjectKind(o->graph) == "winding");
+  std::size_t operands = 0;
+  for (int id : objects_->selectedIds())
+    if (document_.scene().find(id) && doc_.scene.find(id)) ++operands;
+  for (QAction* a : booleanActions_) a->setEnabled(operands >= 2);
+}
+
+double MainWindow::smoothK() const { return smoothK_->value(); }
+
+void MainWindow::setSmoothK(double k) { smoothK_->setValue(k); }
+
+int MainWindow::applyBoolean(const std::string& op) {
+  std::vector<int> ids;
+  QStringList names;
+  for (int id : objects_->selectedIds())
+    if (const SceneObject* o = document_.scene().find(id)) {
+      ids.push_back(id);
+      names << o->name;
+    }
+  if (ids.size() < 2) {
+    statusBar()->showMessage(QString("%1 needs two objects or more: Ctrl+click them in the "
+                                     "Objects dock, in order")
+                                 .arg(QString::fromStdString(op)));
+    return 0;
+  }
+  std::map<std::string, dce::fieldgraph::ParamValue> params;
+  const bool smooth = isSmoothBooleanOp(op);
+  if (smooth) params["k"].num = smoothK_->value();
+  QStringList wrapped;
+  if (smooth)
+    for (int id : ids)
+      if (!isMetricGraph(document_.scene().find(id)->graph))
+        wrapped << document_.scene().find(id)->name;
+  const int id = document_.applyOperation(op, params, ids);
+  if (!id) return 0;
+  QString text = QString("%1 of %2").arg(QString::fromStdString(op), names.join(", "));
+  if (smooth) text += QString(", k %1 mm").arg(smoothK_->value());
+  if (!wrapped.isEmpty())
+    text += QString("; normalize on %1, not distance fields (E-10)").arg(wrapped.join(", "));
+  log(text);
+  statusBar()->showMessage(text);
+  selectAfter_ = id;
+  return id;
 }
 
 void MainWindow::removeObject(int id) {
@@ -772,7 +850,8 @@ void MainWindow::commit(Pending p) {
                                        : QString("%1 objects - DualCEditor")
                                              .arg(objects.size()));
   showObjects();
-  selectObject(selected_);
+  const int select = std::exchange(selectAfter_, 0);
+  selectObject(select && doc_.scene.find(select) ? select : selected_);
   watch();
   showTiming();
   if (p.attempts == 0) return;

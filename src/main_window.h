@@ -21,6 +21,7 @@
 #include <vector>
 
 class QAction;
+class QDoubleSpinBox;
 class QLabel;
 class QPlainTextEdit;
 class QProgressDialog;
@@ -90,6 +91,16 @@ class MainWindow : public QMainWindow {
   QProgressDialog* watertightDialog() const;
   // The octree depth Make Watertight contours at (mesh_solid.h).
   void setWatertightDepth(int depth) { watertightDepth_ = depth; }
+  // Operations > Union ... Smooth Difference (P05 T1): DualC's boolean `op`
+  // over the objects selected in the Objects dock, in selection order (folded
+  // left over more than two), each smooth one with the blend `k` the menu
+  // shows (smoothK). A non-metric operand of a smooth boolean goes under
+  // `normalize` (E-10), which the step's name and the log say. The operands
+  // are hidden; the new object is selected once on screen. Returns its id, 0
+  // when fewer than two objects are selected.
+  int applyBoolean(const std::string& op);
+  double smoothK() const;
+  void setSmoothK(double k);
   // Remove object `id` (a no-op for an unknown id). The camera stays; the last
   // object leaves the viewport empty.
   void removeObject(int id);
@@ -239,6 +250,9 @@ class MainWindow : public QMainWindow {
   int shownIndex_ = 0;     // the undo index of the scene on screen
   QAction* renameAction_;
   QAction* watertightAction_;
+  std::vector<QAction*> booleanActions_;
+  QDoubleSpinBox* smoothK_;
+  int selectAfter_ = 0;  // the object to select when the scene next commits
   std::unique_ptr<WatertightJob> job_;
   int watertightDepth_;
   Doc doc_;  // on screen

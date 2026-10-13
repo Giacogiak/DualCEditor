@@ -93,7 +93,27 @@ The new object's own transform is the identity.
   meshes in different folders, relative mesh paths that exist there become absolute.
   P04 moves meshes to `InMemoryMeshResolver` ids, which ends this.
 
-P05 builds the panels that call `SceneDocument::applyOperation`; T1 has no UI for it.
+- **Booleans (P05 T1).** DualC's booleans take two inputs. Over more operands
+  `operationGraph` folds left in operand order, `op(op(a, b), c)`, every node with the
+  same params (`k`); the pointers stay structural (operand 0 of three at
+  `/root/in/0/in/0`).
+- **Non-metric operands (E-10, decided: wrap automatically).** For a smooth boolean, an
+  operand for which `isMetricGraph` is false goes under `normalize`, outermost, above its
+  `transform` and `scale`. `isMetricGraph` is false for a graph holding a `winding`, a
+  TPMS source, or a `twist`, `bend` or `displace`, unless a `normalize` sits above it; a
+  `mesh` is a distance field and is not wrapped (wrapping it would cost `normalize`'s
+  gradient samples for nothing). The undo step's text names the wrapped operands, which
+  is the history E-10 asks for. Sharp booleans need no wrap: `min` and `max` keep the
+  zero set of any field.
+- **The window.** The `Operations` menu (`MainWindow::applyBoolean`) takes the Objects
+  dock's selection in the order it was made (`ObjectsPanel::selectedIds`), and the menu's
+  `k`. The result is selected when the scene that holds it commits.
+
+`tests/operations_test.cpp` checks every boolean against DualC: the result's graph, read
+back as `dualc_field` reads a graph (`dumpJson`, `parseJson`), has the same field at 216
+points as the graph written by hand in DualC's shorthand. Both are built by DualC's
+`FieldGraph`, so equal values mean the editor builds the graph a user would give
+`dualc_field`; what the GLSL makes of it is DualC's own parity test (`dualc_glsl_parity`).
 
 ## The window's inputs
 
