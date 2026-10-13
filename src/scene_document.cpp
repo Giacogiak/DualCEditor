@@ -462,9 +462,7 @@ bool isBooleanOp(const std::string& op) {
 
 bool isSmoothBooleanOp(const std::string& op) {
   dce::BoolOp bop;
-  return dce::parseBoolOp(op, bop) &&
-         (bop == dce::BoolOp::SmoothUnion || bop == dce::BoolOp::SmoothIntersection ||
-          bop == dce::BoolOp::SmoothDifference);
+  return dce::parseBoolOp(op, bop) && dce::boolOpIsSmooth(bop);
 }
 
 bool isMetricGraph(const fg::GraphNode& graph) {

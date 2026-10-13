@@ -75,6 +75,10 @@ add_library(dualceditor_core STATIC
   src/mesh_library.h
   src/orbit_camera.cpp
   src/objects_panel.cpp
+  src/operation_catalogue.cpp
+  src/operation_catalogue.h
+  src/operation_panel.cpp
+  src/operation_panel.h
   src/objects_panel.h
   src/orbit_camera.h
   src/pick.cpp

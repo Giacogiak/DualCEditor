@@ -169,4 +169,5 @@ add_test(NAME mesh_solid
 add_executable(operations_test operations_test.cpp)
 target_link_libraries(operations_test PRIVATE dualceditor_core)
 dualceditor_target_options(operations_test)
-add_test(NAME operations COMMAND operations_test)
+add_test(NAME operations
+  COMMAND operations_test ${CMAKE_CURRENT_SOURCE_DIR}/../docs/command_reference/01-viewport.md)

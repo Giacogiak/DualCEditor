@@ -2,14 +2,18 @@
 
 ## Current focus
 
-**Now: P05, operations (`../../plan/60_P05_operations.md`).** T1 is done
+**Now: P06, export (`../../plan/70_P06_export.md`).**
+
+Done: P05, operations (`../../plan/60_P05_operations.md`). T1
 (`../../HANDOFF_P05_TASK1.md`): `Operations ▸ Union … Smooth Difference` on the objects
 Ctrl+clicked in the Objects dock, in that order, folded left over more than two, with a
 `Blend k` in mm; non-metric operands of a smooth boolean go under `normalize` (E-10). T2
-is done (`../../HANDOFF_P05_TASK2.md`): `Operations ▸ Fill with TPMS…` and
+(`../../HANDOFF_P05_TASK2.md`): `Operations ▸ Fill with TPMS…` and
 `Fill with Lattice…` fill the selected object, with an optional skin; its GTX check (the
-octet fill against the tapered octet, E-28's trigger) is queued. Next: T3, operation
-panels generated from DualC's registries.
+octet fill against the tapered octet, E-28's trigger) is queued. T3
+(`../../HANDOFF_P05_TASK3.md`): the menu entries and fill panels are generated from DualC's
+registries (`operationCatalogue`, `OperationPanel`), and the command reference lists the
+operations.
 
 Done: P04, import (`../../plan/50_P04_import.md`). E-09 is decided (OBJ, PLY and STL;
 3MF deferred). T1, the mesh readers (`../design/07-mesh-import.md`,

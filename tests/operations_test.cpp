@@ -23,14 +23,24 @@
 //     s / 2) for a skin s, the winding under normalize there;
 //  7. the volume is hidden, undo restores it, and a boolean on the fill works;
 //  8. the skin is the volume's inside within s of its surface.
+// And the operation catalogue the panels are generated from (P05 T3):
+//  9. it holds every boolean DualC parses, every TPMS of tpmsKinds() and every
+//     crystal of strutKinds(), in DualC's order, a smooth boolean with k and a
+//     sharp one with no parameter;
+// 10. every parameter a panel offers is one DualC's builder reads: raising it
+//     changes the built field;
+// 11. the command-reference page (argv[1], when given) names every operation.
 
+#include "example_common.h"
 #include "graph_file.h"
 #include "mesh_import.h"
 #include "mesh_solid.h"
+#include "operation_catalogue.h"
 #include "scene.h"
 #include "scene_document.h"
 
 #include <QCoreApplication>
+#include <QFile>
 #include <QUndoStack>
 
 #include <algorithm>
@@ -376,6 +386,113 @@ int main(int argc, char** argv) {
           "smooth booleans over winding and gyroid operands lower to GLSL");
   } catch (const std::exception& e) {
     check(false, std::string("lowering: ") + e.what());
+  }
+
+  // 9. The catalogue is DualC's registries.
+  {
+    std::vector<std::string> booleans, tpms, struts;
+    for (const OpEntry& e : operationCatalogue()) {
+      if (e.family == OpFamily::Boolean) booleans.push_back(e.op);
+      if (e.family == OpFamily::Tpms) tpms.push_back(e.op);
+      if (e.family == OpFamily::Strut) struts.push_back(e.op);
+    }
+    const std::vector<std::string> expected = {"union", "intersection", "difference", "xor",
+                                               "smooth-union", "smooth-intersection",
+                                               "smooth-difference"};
+    check(booleans == expected, "the catalogue's booleans are the seven DualC parses");
+    bool allParse = true;
+    for (const std::string& op : booleans) {
+      dce::BoolOp b;
+      allParse = allParse && dce::parseBoolOp(op, b) && isBooleanOp(op);
+    }
+    check(allParse, "every catalogue boolean parses as one of DualC's");
+    std::vector<std::string> dualcTpms, dualcStruts;
+    for (const dce::TpmsKind& k : dce::tpmsKinds()) dualcTpms.push_back(k.name);
+    for (const dce::StrutKind& k : dce::strutKinds()) dualcStruts.push_back(k.name);
+    check(!tpms.empty() && tpms == dualcTpms, "the catalogue's TPMS are tpmsKinds(), in order (" +
+                                                  std::to_string(tpms.size()) + ")");
+    check(!struts.empty() && struts == dualcStruts,
+          "the catalogue's crystals are strutKinds(), in order (" + std::to_string(struts.size()) +
+              ")");
+    bool shapes = true;
+    for (const OpEntry& e : operationCatalogue()) {
+      if (e.family != OpFamily::Boolean) continue;
+      shapes = shapes && e.smooth == isSmoothBooleanOp(e.op) &&
+               e.params.size() == (e.smooth ? 1u : 0u) &&
+               (!e.smooth || (e.params[0].key == "k" && e.params[0].value == 0.25));
+    }
+    check(shapes, "a smooth boolean has k at 0.25, a sharp one no parameter");
+    check(operationTitle("smooth-intersection") == "Smooth Intersection" &&
+              operationTitle("schwarz-p") == "Schwarz P" && operationTitle("xor") == "Xor",
+          "menu titles from tokens");
+    check(findOperation("no-such-op") == nullptr &&
+              operationParams("no-such-op", dualc::BBox{}).empty(),
+          "an unknown op has no entry and no parameters");
+    dualc::BBox cube;
+    cube.min = {-10, -10, -10};
+    cube.max = {10, 10, 10};
+    const FillSpec d = defaultFill("octet", cube);
+    bool fillDefaults = true;
+    for (const OpEntry& e : operationCatalogue()) {
+      if (e.family == OpFamily::Boolean) continue;
+      for (const OpParam& p : operationParams(e.op, cube)) {
+        const double want = p.key == "wavelength" ? d.wavelength
+                            : p.key == "thickness" ? d.thickness
+                            : p.key == "radius" ? d.radius
+                                                : d.nodeRadius;
+        fillDefaults = fillDefaults && p.value == want;
+      }
+    }
+    check(fillDefaults, "a fill's parameters start at defaultFill of the volume's box");
+  }
+
+  // 10. Every parameter is read by DualC's builder.
+  {
+    dualc::BBox cube;
+    cube.min = {-10, -10, -10};
+    cube.max = {10, 10, 10};
+    int params = 0;
+    for (const OpEntry& e : operationCatalogue()) {
+      for (const OpParam& p : operationParams(e.op, cube)) {
+        ++params;
+        fg::GraphNode at, raised;
+        if (e.family == OpFamily::Boolean) {
+          const auto graph = [&](double k) {
+            return fg::parseShorthand(e.op + "(sphere(radius=5),sphere(center=[6,0,0],radius=5)," +
+                                      p.key + "=" + number(k) + ")");
+          };
+          at = graph(p.value);
+          raised = graph(p.value * 8.0);
+        } else {
+          const auto spec = [&](double scale) {
+            FillSpec s = defaultFill(e.op, cube);
+            s.kind = e.op;
+            if (p.key == "wavelength") s.wavelength *= scale;
+            if (p.key == "thickness") s.thickness *= scale;
+            if (p.key == "radius") s.radius *= scale;
+            if (p.key == "nodeRadius") s.nodeRadius *= scale;
+            return s;
+          };
+          at = fillSource(spec(1.0));
+          raised = fillSource(spec(1.5));
+        }
+        check(maxDiff(values(at, points), values(raised, points)) > 1e-6,
+              e.op + ": raising " + p.key + " changes DualC's field");
+      }
+    }
+    check(params > 0, "the catalogue has " + std::to_string(params) + " parameters");
+  }
+
+  // 11. The command-reference page names every operation.
+  if (argc > 1) {
+    QFile page(argv[1]);
+    const bool read = page.open(QIODevice::ReadOnly);
+    const std::string text = read ? page.readAll().toStdString() : std::string();
+    std::string missing;
+    for (const OpEntry& e : operationCatalogue())
+      if (text.find("`" + e.op + "`") == std::string::npos) missing += " " + e.op;
+    check(read && missing.empty(), std::string("the command reference names every operation") +
+                                       (missing.empty() ? "" : ", missing:" + missing));
   }
 
   if (failures) {

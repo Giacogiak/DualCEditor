@@ -6,6 +6,7 @@
 #include "mesh_library.h"
 #include "mesh_solid.h"
 #include "objects_panel.h"
+#include "operation_panel.h"
 #include "parameter_panel.h"
 #include "scene_file.h"
 #include "transform_panel.h"
@@ -216,33 +217,29 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   watertightAction_->setEnabled(false);
   // Booleans (P05 T1), on two or more objects selected in the Objects dock.
   QMenu* opMenu = menuBar()->addMenu("&Operations");
-  const auto addBoolean = [&](const char* text, const char* op) {
-    QAction* a = opMenu->addAction(text, this, [this, op] { applyBoolean(op); });
-    a->setData(QString(op));
-    a->setEnabled(false);
-    booleanActions_.push_back(a);
-  };
-  addBoolean("&Union", "union");
-  addBoolean("&Intersection", "intersection");
-  addBoolean("&Difference", "difference");
-  addBoolean("&Xor", "xor");
-  opMenu->addSeparator();
-  addBoolean("Smooth U&nion", "smooth-union");
-  addBoolean("Smooth In&tersection", "smooth-intersection");
-  addBoolean("Smooth Di&fference", "smooth-difference");
+  // One entry per boolean of DualC's registry (P05 T3), the smooth ones after
+  // a separator, sharing the k row generated from their parameter.
+  for (const bool smooth : {false, true}) {
+    if (smooth) opMenu->addSeparator();
+    for (const OpEntry* e : operationsOf(OpFamily::Boolean)) {
+      if (e->smooth != smooth) continue;
+      const std::string op = e->op;
+      QAction* a = opMenu->addAction(QString::fromStdString(operationTitle(op)), this,
+                                     [this, op] { applyBoolean(op); });
+      a->setData(QString::fromStdString(op));
+      a->setEnabled(false);
+      booleanActions_.push_back(a);
+    }
+  }
   auto* kRow = new QWidget(opMenu);
   auto* kLayout = new QHBoxLayout(kRow);
   kLayout->setContentsMargins(8, 2, 8, 2);
-  kLayout->addWidget(new QLabel("Blend k", kRow));
-  smoothK_ = new QDoubleSpinBox(kRow);
-  smoothK_->setObjectName("smoothK");
-  smoothK_->setDecimals(3);
-  smoothK_->setRange(0.001, 1000.0);
-  smoothK_->setSingleStep(0.05);
-  smoothK_->setValue(0.25);  // DualC's default k
-  smoothK_->setSuffix(" mm");
-  smoothK_->setToolTip("The blend width of the smooth booleans, in mm (DualC's k)");
-  kLayout->addWidget(smoothK_);
+  const std::vector<OpParam> kParam = operationParams("smooth-union", dualc::BBox{});
+  for (const OpParam& p : kParam) {
+    kLayout->addWidget(new QLabel(QString::fromStdString(p.label), kRow));
+    smoothK_ = paramSpinBox(p, "smooth", kRow);
+    kLayout->addWidget(smoothK_);
+  }
   auto* kAction = new QWidgetAction(opMenu);
   kAction->setDefaultWidget(kRow);
   opMenu->addAction(kAction);

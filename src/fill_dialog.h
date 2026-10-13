@@ -4,8 +4,8 @@
 
 #include <QDialog>
 
+class OperationPanel;
 class QCheckBox;
-class QComboBox;
 class QDoubleSpinBox;
 
 // Operations > Fill with TPMS and Fill with Lattice (P05 T2): the type and
@@ -13,7 +13,9 @@ class QDoubleSpinBox;
 // box. A TPMS dialog sets the wavelength and the wall's t (onion's thickness,
 // the wall 2 t across); a lattice dialog sets the wavelength, the radius and
 // the node radius. Both offer the volume's skin, off by default, whose
-// thickness starts at the wall (2 t) or the strut (2 radius) width.
+// thickness starts at the wall (2 t) or the strut (2 radius) width. The type
+// and its lengths are an OperationPanel over the family's catalogue entries
+// (P05 T3), so a new DualC TPMS or crystal gets its fields with no change here.
 class FillDialog : public QDialog {
   Q_OBJECT
 
@@ -30,11 +32,7 @@ class FillDialog : public QDialog {
  private:
   Family family_;
   dualc::Vector3 center_;
-  QComboBox* kind_ = nullptr;
-  QDoubleSpinBox* wavelength_ = nullptr;
-  QDoubleSpinBox* thickness_ = nullptr;
-  QDoubleSpinBox* radius_ = nullptr;
-  QDoubleSpinBox* nodeRadius_ = nullptr;
+  OperationPanel* panel_ = nullptr;
   QCheckBox* skinOn_ = nullptr;
   QDoubleSpinBox* skin_ = nullptr;
 };

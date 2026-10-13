@@ -122,6 +122,19 @@ The new object's own transform is the identity.
   a tenth of its diagonal for the wavelength, its centre, `t` a fifth and the radii a tenth
   of the wavelength (DualC's `mesh_lattice.json` and strut builder ratios).
 
+- **Panels from DualC's registries (P05 T3).** `operationCatalogue()`
+  (`src/operation_catalogue.h`) lists every op the menu and dialogs offer, built from
+  `example_common`: the `BoolOp` values (walked until `boolOpName` stops parsing back,
+  since DualC does not list the enum), `tpmsKinds()` and `strutKinds()`. DualC's
+  registries carry a token and a blurb, not parameters, so each *family* has its parameter
+  list written once (smooth boolean: `k`; TPMS: `wavelength`, `thickness`; strut:
+  `wavelength`, `radius`, `nodeRadius`), and `operationParams` gives an op's list at the
+  defaults for a box. `OperationPanel` (`src/operation_panel.h`) turns a family's entries
+  into a `Type` combo and one `paramSpinBox` per parameter; `FillDialog` is that panel
+  plus the skin row, and the boolean menu entries and their `Blend k` are generated the
+  same way. A new op of an existing family needs no editor change; a new family needs a
+  parameter list here (or a parameter registry in DualC, which does not exist yet).
+
 `tests/operations_test.cpp` checks every boolean and fill against DualC: the result's graph, read
 back as `dualc_field` reads a graph (`dumpJson`, `parseJson`), has the same field at 216
 points as the graph written by hand in DualC's shorthand. Both are built by DualC's

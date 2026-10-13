@@ -15,6 +15,7 @@
 #include "fill_dialog.h"
 #include "main_window.h"
 #include "objects_panel.h"
+#include "operation_catalogue.h"
 #include "transform_panel.h"
 #include "viewport.h"
 
@@ -673,6 +674,42 @@ int main(int argc, char* argv[]) {
             "every length in the dialogs is in mm");
       lattice.setSkin(true, 0.3);
       check(lattice.spec().skin == 0.3, "the skin is taken when ticked");
+      // P05 T3: the panels are generated from the catalogue, DualC's registries.
+      bool panels = true;
+      int fillOps = 0;
+      for (const OpEntry& e : operationCatalogue()) {
+        if (e.family == OpFamily::Boolean) continue;
+        ++fillOps;
+        FillDialog& d = e.family == OpFamily::Tpms ? tpms : lattice;
+        d.setKind(e.op);
+        const std::vector<OpParam> params = operationParams(e.op, *box);
+        bool fields = d.spec().kind == e.op &&
+                      std::size_t(d.findChildren<QDoubleSpinBox*>().size()) == params.size() + 1;
+        for (const OpParam& p : params) {
+          QString name = QString::fromStdString(p.key);
+          name[0] = name[0].toUpper();
+          const auto* b = d.findChild<QDoubleSpinBox*>("fill" + name);
+          fields = fields && b && b->value() == p.value && b->suffix() == " mm";
+        }
+        if (!fields) std::fprintf(stderr, "main_window_test: no generated panel for %s\n",
+                                  e.op.c_str());
+        panels = panels && fields;
+      }
+      tpms.setKind("gyroid");
+      lattice.setKind("octet");
+      check(panels && fillOps > 0, "every TPMS and crystal of DualC's registries gets its panel (" +
+                                       std::to_string(fillOps) + " ops)");
+      std::vector<std::string> menuOps;
+      for (QAction* a : m.findChildren<QAction*>())
+        if (findOperation(a->data().toString().toStdString()))
+          menuOps.push_back(a->data().toString().toStdString());
+      std::vector<std::string> booleans;
+      for (const OpEntry* e : operationsOf(OpFamily::Boolean)) booleans.push_back(e->op);
+      std::sort(menuOps.begin(), menuOps.end());
+      std::sort(booleans.begin(), booleans.end());
+      const auto* k = m.findChild<QDoubleSpinBox*>("smoothK");
+      check(menuOps == booleans && k && k->suffix() == " mm",
+            "every boolean of DualC's registry has its menu entry, the smooth ones their k");
 
       Viewport& vp = *m.viewport();
       const QImage solid = vp.grabFramebuffer();

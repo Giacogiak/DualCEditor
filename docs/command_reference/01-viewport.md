@@ -186,7 +186,7 @@ the pointer is a character offset.
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
-| `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference`, and the `Blend k` spin box of the smooth ones, greyed out with fewer than two objects selected (see *Booleans* below); `Fill with TPMS…` and `Fill with Lattice…`, greyed out with no object selected (see *Fills* below). No shortcut. |
+| `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference` (one per DualC boolean, see *Operation list*), and the `Blend k` spin box of the smooth ones, greyed out with fewer than two objects selected (see *Booleans* below); `Fill with TPMS…` and `Fill with Lattice…`, greyed out with no object selected (see *Fills* below). No shortcut. |
 | `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
@@ -248,7 +248,8 @@ object is selected once its shader links.
 
 - **More than two operands** fold left in selection order: `a, b, c` gives
   `op(op(a, b), c)`, so `Difference` cuts `b` and `c` out of `a`.
-- **`Blend k`** is in millimetres, 0.25 by default (DualC's default), from 0.001 to 1000.
+- **`Blend k`** is in millimetres, 0.25 by default (DualC's default), from 0.0001 to
+  100000, four decimals, like every length of the operation panels.
   It is read when the entry is picked; changing it later does not change a result.
   The sharp booleans ignore it.
 - **Any object** can be an operand: a primitive, a TPMS or lattice graph, an imported
@@ -293,6 +294,38 @@ node radius 0.381 mm`.
   radii) are in the Parameters dock, and a boolean takes it as an operand. A fill of a
   `[mesh]` volume is metric; a fill of a `[winding]` one is not, so a smooth boolean wraps
   it in `normalize` (E-10).
+
+## Operation list
+
+The `Operations` menu and the fill dialogs are generated from DualC's registries in
+`example_common` (P05 T3): the booleans `BoolOp` names, the TPMS of `tpmsKinds()` and the
+crystals of `strutKinds()`, in DualC's order. A new DualC op of one of these families
+appears in the menu or in the `Type` combo, with its fields, without an editor change. Each
+family's parameters are the editor's (DualC's registries carry no parameter list); every
+one is a length in mm. `ctest -R operations` fails when an op below is missing here.
+
+| Op | Family | Where | Parameters (default) |
+|---|---|---|---|
+| `union` | boolean | `Operations ▸ Union` | none |
+| `intersection` | boolean | `Operations ▸ Intersection` | none |
+| `difference` | boolean | `Operations ▸ Difference` | none |
+| `xor` | boolean | `Operations ▸ Xor` | none |
+| `smooth-union` | smooth boolean | `Operations ▸ Smooth Union` | `Blend k` (0.25) |
+| `smooth-intersection` | smooth boolean | `Operations ▸ Smooth Intersection` | `Blend k` (0.25) |
+| `smooth-difference` | smooth boolean | `Operations ▸ Smooth Difference` | `Blend k` (0.25) |
+| `gyroid` | TPMS | `Fill with TPMS…` | `Wavelength` (box diagonal / 10), `Wall thickness t` (wavelength / 5) |
+| `schwarz-p` | TPMS | `Fill with TPMS…` | as `gyroid` |
+| `diamond` | TPMS | `Fill with TPMS…` | as `gyroid` |
+| `fischer-koch` | TPMS | `Fill with TPMS…` | as `gyroid` |
+| `lidinoid` | TPMS | `Fill with TPMS…` | as `gyroid` |
+| `neovius` | TPMS | `Fill with TPMS…` | as `gyroid` |
+| `sc` | strut lattice | `Fill with Lattice…` | `Wavelength` (box diagonal / 10), `Radius` (wavelength / 10), `Node radius` (the radius) |
+| `bcc` | strut lattice | `Fill with Lattice…` | as `sc` |
+| `fcc` | strut lattice | `Fill with Lattice…` | as `sc` |
+| `octet` | strut lattice | `Fill with Lattice…` | as `sc` |
+
+The menu text is the token in title case (`smooth-union` gives `Smooth Union`). Both fill
+dialogs add `Keep the skin` (see *Fills*), which is the editor's, not an op parameter.
 
 ## Undo and redo
 
