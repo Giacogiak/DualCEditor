@@ -15,7 +15,7 @@ field's own bounds padded by 5%.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `graph` (positional) | `gyroid_box.json` | The graphs to open. Each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window the first is opened and the others added (*Objects* below). A `.dcscene` opens that scene (*Scene files* below); `--snapshot` and `--bench` take it alone, with no graphs after it. In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
+| `graph` (positional) | `gyroid_box.json` | The graphs to open, or meshes to import (`.obj`, `.ply`, `.stl`: one object each, as a drop imports them, *Importing a mesh* below). Each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window the first is opened and the others added (*Objects* below). A `.dcscene` opens that scene (*Scene files* below); `--snapshot` and `--bench` take it alone, with no graphs after it. In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
 | `--snapshot PATH` | off | Render one 800×600 frame of `graph` (default view) off-screen to the PNG `PATH`, then exit. Opens no window. |
 | `--preview-scale S` | `0.5` | Resolution factor while the view moves. The view is traced at `S` × the window's pixels, then upscaled linearly. It returns to full resolution 0.18 s after the last input. Clamped to 0.1 – 1. `1` turns the preview off. A value that is not a number exits 1. Same flag and default as `dualc_field_view`. |
 | `--bench` | off | Time `graph` while orbiting and when settled, print one JSON line on stdout, and exit. See *Measurement run*. Vsync is off for the run. |
@@ -77,7 +77,7 @@ printf 'translate(by=[2,0,0],sphere(radius=0.8))' > c.fld
 | `File ▸ Open…` (`Ctrl+O`, the platform's Open shortcut) | File dialog filtered on `*.dcscene *.json *.fld`, then on scenes only, graphs only, and `All files`. Starts in the last file's folder. A graph **replaces** the scene with one object; a `.dcscene` replaces it with the saved scene (*Scene files* below). |
 | `File ▸ Add…` (no shortcut) | The same dialog, several files allowed. **Adds** one object per file. |
 | The `graph` arguments | The first is opened, the others added. |
-| Drop files on the window | Accepted when the drag carries a local file ending in `.json`, `.fld` or `.dcscene` (any case). Other files are refused: the cursor shows no drop. A `.dcscene` (the first, if several) **opens**, replacing the scene. Then the drop **adds** one object per graph file the drag carries, in order, to the scene on screen (the default `gyroid_box.json` included: delete it from the Objects dock). A drop anywhere on the window counts, the viewport, the docks and the log included. |
+| Drop files on the window | Accepted when the drag carries a local file ending in `.json`, `.fld`, `.dcscene`, `.obj`, `.ply` or `.stl` (any case). A mesh file is imported (*Importing a mesh* below). Other files are refused: the cursor shows no drop. A `.dcscene` (the first, if several) **opens**, replacing the scene. Then the drop **adds** one object per graph file the drag carries, in order, to the scene on screen (the default `gyroid_box.json` included: delete it from the Objects dock). A drop anywhere on the window counts, the viewport, the docks and the log included. |
 
 Opening or adding frames the camera on the scene's trace box (the union of every object's
 box), like `F`. The window title is `<object name> - DualCEditor` with one object,
@@ -85,6 +85,29 @@ box), like `F`. The window title is `<object name> - DualCEditor` with one objec
 
 A relative mesh path (`mesh(path="cube.obj")`) is looked up beside the graph file first,
 then in the working directory. `dualc_field_view` looks only in the working directory.
+
+### Importing a mesh
+
+A dropped `.obj`, `.ply` or `.stl` (or one named by `File ▸ Add…` or on the command
+line) becomes one object named after the file. The file is not watched.
+
+| The mesh is | The object is | Objects dock |
+|---|---|---|
+| Watertight (no open, no non-manifold edge, DualC's counts) and oriented outward | a `mesh` node: DualC's signed distance to it | `name  [mesh]` |
+| Anything else: open, a soup, non-manifold, inside out | a `winding` node: inside is where the generalized winding number is over ½ | `name  [winding]` |
+
+The log gives the counts read and welded and what was found (`watertight`, or `4 open
+edges`, `normals inward`, …). A file that does not read gives its message in the status bar
+and the log (`../design/07-mesh-import.md`).
+
+`Edit ▸ Make Watertight` (enabled on a selected `[winding]` object) contours its winding
+field into a closed mesh on a worker thread and replaces the object with a `[mesh]` one,
+one undo step (`Make watertight <name>`). A dialog shows the stage (sampling, then
+contouring) and its progress; the window keeps drawing. **Cancel** stops the sampling or
+the contouring and leaves the object as it was. The preview bake that follows the result
+**cannot be cancelled** (DualC D-45); the dialog says so.
+
+A `.dcscene` carries imported meshes as `meshes/<id>.obj` entries.
 
 ### Scene files
 
@@ -209,7 +232,8 @@ Every change to the scene is one step on an undo stack (`../design/04-scene-mode
 
 | Step | Undo |
 |---|---|
-| Add (`File ▸ Add…`, a drop, a later command-line graph) | Removes the object. Its id is not given to the next add. |
+| Add (`File ▸ Add…`, a drop, a later command-line graph, an imported mesh) | Removes the object. Its id is not given to the next add. |
+| `Edit ▸ Make Watertight` | The `[winding]` object comes back. |
 | Delete | Puts the object back at its place, with its id, colour, name and parameter edits. |
 | Rename, show or hide, an edit of `colour` or `matrix` in the Parameters dock | The old value; one uniform, no recompile, no relink. |
 | A parameter edit | The old value; one uniform. Steps of one spin box in a row are one step. |
@@ -268,6 +292,7 @@ the keys (`F`).
 | `compile` | Wall time of the GL compile of both shader stages plus the program link, for the scene on screen. DualC's parse and codegen are not included. It also goes to the Log at each load. |
 | `frame` | GPU time of the last full-resolution (settled) frame, from a `GL_TIME_ELAPSED` query. |
 | `preview` | GPU time of the last preview frame, with the upscale blit. |
+| `mesh grid` | Shown when the scene on screen has a `mesh` or `winding` node: the grid each is previewed at, samples per axis (`96³`). |
 
 The query is read a few milliseconds after the frame, without stalling. While idle, nothing
 is measured and the values stay.
@@ -363,8 +388,10 @@ Exit 1 when the shader does not link or a phase takes over 60 s, 2 when the grap
 load, 77 with no GL 3.3 core context (on Linux with no display, as for `--snapshot`).
 `scripts/measure_viewport.py` runs it over the P00 reference scenes, and with `--objects`
 over P01's scenes of 1 to 10 objects and P07's column stacked in depth (it then also
-prints the ms per added object). `--unit ID` sets the unit id printed in each row (default
-`P00.5`, or `P01.4` with `--objects`). Its checklists are in
+prints the ms per added object). With `--meshes` it runs scenes of 1, 3 and 5 imported
+closed meshes (UV spheres written as OBJ, each a `mesh` node at the 96³ grid) at 0.35 and
+1.0 (P04 T2). `--unit ID` sets the unit id printed in each row (default `P00.5`, `P01.4`
+with `--objects`, `P04.2` with `--meshes`). Its checklists are in
 `docs/roadmap/02-measurements.md`.
 
 ```bash

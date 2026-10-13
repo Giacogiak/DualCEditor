@@ -2,6 +2,8 @@
 
 #include "graph_file.h"
 #include "graph_scene.h"
+#include "mesh_library.h"
+#include "mesh_solid.h"
 #include "objects_panel.h"
 #include "parameter_panel.h"
 #include "scene_file.h"
@@ -10,6 +12,7 @@
 
 #include <QAction>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
 #include <QDragEnterEvent>
@@ -22,6 +25,9 @@
 #include <QMenuBar>
 #include <QMimeData>
 #include <QPlainTextEdit>
+#include <QPointer>
+#include <QProgressDialog>
+#include <QThread>
 #include <QStatusBar>
 #include <QUndoStack>
 #include <QUrl>
@@ -36,15 +42,27 @@ namespace {
 
 namespace fg = dce::fieldgraph;
 
-// The local graph and scene files a drag carries, in order.
+// The local graph, mesh and scene files a drag carries, in order.
 QStringList droppedGraphs(const QMimeData* mime) {
   QStringList out;
   if (!mime || !mime->hasUrls()) return out;
-  for (const QUrl& url : mime->urls())
+  for (const QUrl& url : mime->urls()) {
+    const QString path = url.toLocalFile();
     if (url.isLocalFile() &&
-        (isGraphFileName(url.toLocalFile()) || isSceneFileName(url.toLocalFile())))
-      out << url.toLocalFile();
+        (isGraphFileName(path) || isSceneFileName(path) || isMeshFileName(path)))
+      out << path;
+  }
   return out;
+}
+
+// The progress dialog's text for DualC's stage. Bakes are not cancellable
+// (DualC D-45): the dialog says so, since the preview of the result bakes.
+QString watertightLabel(const QString& name, int stage) {
+  return QString("Make watertight: %1\n%2\n\n"
+                 "Cancel stops the sampling and the contouring. The preview bake "
+                 "that follows cannot be cancelled (DualC D-45).")
+      .arg(name, stage == int(dualc::Stage::Contour) ? "Contouring the winding field..."
+                                                     : "Sampling the winding field...");
 }
 
 QString absolute(const QString& path) {
@@ -59,8 +77,43 @@ const LoweredObject* loweredObject(const LoweredScene& lowered, int id) {
 
 }  // namespace
 
+// One Make Watertight: DualC runs on `thread`, which reports through `sink`
+// to the GUI thread and leaves its result or error here for watertightDone.
+struct MainWindow::WatertightJob : dualc::ProgressSink {
+  MainWindow* window = nullptr;
+  int id = 0;
+  QString name;
+  fg::GraphNode before;  // the winding graph it replaces
+  std::shared_ptr<const MeshBuffers> mesh;
+  int depth = kWatertightDepth;
+  dualc::CancelToken cancel;
+  QThread* thread = nullptr;
+  QProgressDialog* dialog = nullptr;
+  // Written by the thread before it finishes, read after.
+  std::optional<MeshBuffers> result;
+  dualc::Diagnostics diag;
+  QString error;
+  bool cancelled = false;
+  double ms = 0.0;
+
+  void report(dualc::Stage stage, std::size_t done, std::size_t total) noexcept override {
+    QMetaObject::invokeMethod(
+        window,
+        [w = window, s = int(stage), done, total] { w->watertightProgress(s, done, total); },
+        Qt::QueuedConnection);
+  }
+};
+
+MainWindow::~MainWindow() {
+  if (job_) {
+    job_->cancel.request();
+    job_->thread->wait();
+  }
+}
+
 MainWindow::MainWindow(float previewScale, QWidget* parent)
-    : QMainWindow(parent), viewport_(new Viewport(previewScale, this)) {
+    : QMainWindow(parent), viewport_(new Viewport(previewScale, this)),
+      watertightDepth_(kWatertightDepth) {
   setWindowTitle("DualCEditor");
   setCentralWidget(viewport_);
   setAcceptDrops(true);
@@ -153,6 +206,11 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     removeObject(selected_);
   });
   deleteAction_->setEnabled(false);
+  editMenu->addSeparator();
+  watertightAction_ = editMenu->addAction("Make &Watertight", this, [this] {
+    makeWatertight(selected_);
+  });
+  watertightAction_->setEnabled(false);
   QMenu* viewMenu = menuBar()->addMenu("&View");
   viewMenu->addAction(objectsDock->toggleViewAction());
   viewMenu->addAction(transformDock->toggleViewAction());
@@ -261,6 +319,7 @@ void MainWindow::addFile(const QString& path) {
     reportError(path, "a scene is opened, not added: File > Open");
     return;
   }
+  if (isMeshFileName(path)) return importMesh(path);
   file_ = absolute(path);
   if (std::optional<fg::GraphNode> graph = readGraph(file_)) {
     next_ = ApplyContext{true, file_, true, {}, {{file_, false}}, false};
@@ -270,6 +329,129 @@ void MainWindow::addFile(const QString& path) {
     waiting_.emplace_back(file_, false);
   }
   watch();
+}
+
+void MainWindow::importMesh(const QString& path) {
+  file_ = absolute(path);
+  MeshImport im = importMeshFile(file_);
+  if (!im.graph) return reportError(file_, im.error);
+  const QString name = QFileInfo(file_).fileName();
+  const MeshRead& r = im.read;
+  log(QString("%1: %2 vertices, %3 triangles read; %4 vertices, %5 triangles welded%6; "
+              "%7: a %8 object")
+          .arg(file_)
+          .arg(r.readVertices)
+          .arg(r.readTriangles)
+          .arg(findLibraryMesh(im.id)->vertexCount())
+          .arg(findLibraryMesh(im.id)->triangleCount())
+          .arg(r.collapsed ? QString(", %1 collapsed").arg(r.collapsed) : QString())
+          .arg(im.check.summary(), QString::fromStdString(im.graph->op)));
+  next_ = ApplyContext{true, file_, true, {}, {}, false};
+  document_.addObject(name, std::move(*im.graph));
+}
+
+QProgressDialog* MainWindow::watertightDialog() const {
+  return job_ ? job_->dialog : nullptr;
+}
+
+bool MainWindow::makeWatertight(int id) {
+  const SceneObject* o = document_.scene().find(id);
+  if (job_ || !o || meshObjectKind(o->graph) != "winding") return false;
+  auto job = std::make_unique<WatertightJob>();
+  job->window = this;
+  job->id = id;
+  job->name = o->name;
+  job->before = o->graph;
+  job->mesh = findLibraryMesh(o->graph.params.at("id").str);
+  job->depth = watertightDepth_;
+  if (!job->mesh) return false;
+  // Window-modal, shown, not exec'd: the event loop runs on, the viewport
+  // keeps drawing, and no edit can reach the object while the job runs.
+  job->dialog = new QProgressDialog(watertightLabel(job->name, 0), "Cancel", 0, 1000, this);
+  job->dialog->setWindowTitle("Make Watertight");
+  job->dialog->setWindowModality(Qt::WindowModal);
+  job->dialog->setMinimumDuration(0);
+  job->dialog->setAutoClose(false);
+  job->dialog->setAutoReset(false);
+  job->dialog->setValue(0);
+  WatertightJob* raw = job.get();
+  connect(job->dialog, &QProgressDialog::canceled, this, [raw] {
+    raw->cancel.request();
+    raw->dialog->setLabelText(QString("Make watertight: %1\nCancelling...").arg(raw->name));
+  });
+  job->thread = QThread::create([raw] {
+    QElapsedTimer t;
+    t.start();
+    try {
+      raw->result = ::makeWatertight(*raw->mesh, raw->depth, &raw->cancel, raw, &raw->diag);
+    } catch (const dualc::Cancelled&) {
+      raw->cancelled = true;
+    } catch (const std::exception& e) {
+      raw->error = e.what();
+    }
+    raw->ms = double(t.nsecsElapsed()) / 1e6;
+  });
+  connect(job->thread, &QThread::finished, this, &MainWindow::watertightDone);
+  job_ = std::move(job);
+  updateObjectActions();
+  statusBar()->showMessage(QString("Making %1 watertight...").arg(job_->name));
+  job_->thread->start();
+  return true;
+}
+
+// Sample is the first half of the bar, Contour the second.
+void MainWindow::watertightProgress(int stage, qulonglong done, qulonglong total) {
+  if (!job_ || job_->cancel.requested()) return;
+  const int half = stage == int(dualc::Stage::Contour) ? 1 : 0;
+  const int value = half * 500 + (total ? int(500 * done / total) : 0);
+  job_->dialog->setLabelText(watertightLabel(job_->name, stage));
+  job_->dialog->setValue(std::max(job_->dialog->value(), value));
+}
+
+void MainWindow::watertightDone() {
+  std::unique_ptr<WatertightJob> job = std::move(job_);
+  job->thread->wait();
+  delete job->thread;
+  job->dialog->deleteLater();
+  updateObjectActions();
+  const SceneObject* o = document_.scene().find(job->id);
+  bool ok = false;
+  if (job->cancelled) {
+    statusBar()->showMessage(QString("Make watertight of %1 cancelled").arg(job->name));
+    log(QString("%1: make watertight cancelled after %2 ms").arg(job->name).arg(job->ms, 0, 'f', 0));
+  } else if (!job->error.isEmpty() || !job->result || job->result->triangleCount() == 0) {
+    reportError(job->name, "make watertight: " + (job->error.isEmpty()
+                                                     ? QString("the winding field has no surface")
+                                                     : job->error));
+  } else if (!o || !sameGraph(o->graph, job->before)) {
+    statusBar()->showMessage(
+        QString("Make watertight of %1 dropped: the object changed").arg(job->name));
+  } else {
+    const MeshCheck check = checkMesh(*job->result);
+    const std::uint32_t vertices = job->result->vertexCount();
+    const std::uint32_t triangles = job->result->triangleCount();
+    const std::string id = addLibraryMesh(std::move(*job->result));
+    log(QString("%1: made watertight in %2 ms at depth %3: %4 vertices, %5 triangles, %6")
+            .arg(job->name)
+            .arg(job->ms, 0, 'f', 0)
+            .arg(job->depth)
+            .arg(vertices)
+            .arg(triangles)
+            .arg(check.summary()));
+    statusBar()->showMessage(QString("Made %1 watertight: %2 triangles").arg(job->name).arg(triangles));
+    // A contour can come out non-manifold; then it stays a winding node over
+    // the closed result, which still previews as a solid.
+    document_.replaceGraph(job->id, meshSourceNode(check.solid() ? "mesh" : "winding", id), {},
+                           "Make watertight");
+    ok = true;
+  }
+  emit watertightFinished(ok);
+}
+
+void MainWindow::updateObjectActions() {
+  const SceneObject* o = document_.scene().find(selected_);
+  watertightAction_->setEnabled(!job_ && o && doc_.scene.find(selected_) &&
+                                meshObjectKind(o->graph) == "winding");
 }
 
 void MainWindow::removeObject(int id) {
@@ -393,6 +575,7 @@ void MainWindow::selectObject(int id) {
   deleteAction_->setEnabled(id != 0);
   renameAction_->setEnabled(id != 0);
   viewport_->setSelectedObject(id);
+  updateObjectActions();
   const bool moved = id != selected_;
   selected_ = id;
   showPose();
@@ -602,6 +785,7 @@ void MainWindow::commit(Pending p) {
   log(QString("loaded %1, shader compile %2 ms")
           .arg(p.loaded)
           .arg(viewport_->compileMs(), 0, 'f', 1));
+  updateObjectActions();
   for (int i = 0; i < p.attempts; ++i) emit loadFinished(true);
 }
 
@@ -794,6 +978,20 @@ void MainWindow::showTiming() {
                               : ms(viewport_->hasScene() ? viewport_->compileMs() : -1.0),
                           ms(frameMs_));
   if (previewMs_ >= 0.0) text += QString("   preview %1").arg(ms(previewMs_));
+  // The grid a mesh or winding object is previewed at: each such node is
+  // baked to a 3D texture of this many samples per axis (P04 T2).
+  QStringList grids;
+  if (viewport_->hasScene())
+    for (const fg::MeshTexture& m : viewport_->scene().meshes) {
+      const QString g = m.resolution.x == m.resolution.y && m.resolution.y == m.resolution.z
+                            ? QString("%1³").arg(m.resolution.x)
+                            : QString("%1×%2×%3")
+                                  .arg(m.resolution.x)
+                                  .arg(m.resolution.y)
+                                  .arg(m.resolution.z);
+      if (!grids.contains(g)) grids << g;
+    }
+  if (!grids.isEmpty()) text += QString("   mesh grid %1").arg(grids.join(", "));
   timing_->setText(text);
 }
 

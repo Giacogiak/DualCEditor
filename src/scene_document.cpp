@@ -156,8 +156,9 @@ class SetParameter : public QUndoCommand {
 
 class ReplaceGraph : public QUndoCommand {
  public:
-  ReplaceGraph(SceneDocument* doc, const SceneObject& o, fg::GraphNode graph, QString meshDir)
-      : QUndoCommand(QString("Reload %1").arg(o.name)),
+  ReplaceGraph(SceneDocument* doc, const SceneObject& o, fg::GraphNode graph, QString meshDir,
+               const QString& verb)
+      : QUndoCommand(QString("%1 %2").arg(verb.isEmpty() ? QString("Reload") : verb, o.name)),
         doc_(doc),
         id_(o.id),
         beforeGraph_(o.graph),
@@ -341,10 +342,11 @@ void SceneDocument::setParameter(int id, const ParamKey& key, std::vector<float>
   push(new SetParameter(this, id, key, before, std::move(current), std::move(value)));
 }
 
-void SceneDocument::replaceGraph(int id, fg::GraphNode graph, QString meshDir) {
+void SceneDocument::replaceGraph(int id, fg::GraphNode graph, QString meshDir,
+                                 const QString& verb) {
   const SceneObject* o = scene_.find(id);
   if (!o) return;
-  push(new ReplaceGraph(this, *o, std::move(graph), std::move(meshDir)));
+  push(new ReplaceGraph(this, *o, std::move(graph), std::move(meshDir), verb));
 }
 
 int SceneDocument::applyOperation(const std::string& op,

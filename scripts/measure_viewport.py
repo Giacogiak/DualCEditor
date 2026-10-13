@@ -7,11 +7,14 @@ in docs/roadmap/02-measurements.md. The owner runs it on the GTX 1050 Ti laptop.
   python scripts/measure_viewport.py --field-view PATH  # also diff snapshots against dualc_field_view
   python scripts/measure_viewport.py --objects          # P01 T4, P07: frame time against object count
   python scripts/measure_viewport.py --objects --unit P07.3   # label the rows with another unit
+  python scripts/measure_viewport.py --meshes           # P04 T2: frame time against imported meshes
 
 Without --objects, each P00 scene runs at preview scales 0.35, 0.5 and 1.0. With
 --objects, scenes of 1, 3, 5 and 10 analytic primitives side by side, of 1, 3, 5 and 10
 stacked in depth (P07 T1), and of 1 and 3 TPMS-in-box objects run at 0.35 and 1.0, and the
-script also prints the growth per added object. Every run goes
+script also prints the growth per added object. With --meshes, scenes of 1, 3 and 5
+imported closed meshes (UV spheres written as OBJ) run at 0.35 and 1.0, with the same
+growth line (P04 T2). Every run goes
 through `DualCEditor --bench` (docs/command_reference/01-viewport.md). The script prints
 one markdown row per run and appends the raw JSON lines to measurements-<date>.jsonl in the
 working directory.
@@ -54,6 +57,10 @@ PRIMITIVE_COUNTS = (1, 3, 5, 10)
 VIEW_AXIS = (math.cos(0.5) * math.sin(0.7), math.sin(0.5), math.cos(0.5) * math.cos(0.7))
 TPMS_COUNTS = (1, 3)
 OBJECT_SCALES = (0.35, 1.0)
+# P04 T2: scenes of imported mesh objects (closed UV spheres written as OBJ, so
+# each imports as a `mesh` node baked to the 96^3 preview grid), side by side
+# as the primitives are.
+MESH_COUNTS = (1, 3, 5)
 # gyroid_box.json without its spherical hole; copies sit 5 apart along x.
 TPMS_IN_BOX = ("intersection(box(min=[-2,-2,-2],max=[2,2,2]),"
                "onion(normalize(gyroid(wavelength=1)),thickness=0.3))")
@@ -106,6 +113,36 @@ def object_scenes(work: Path) -> list[tuple[str, int, list[Path]]]:
     return ([(f"{n} primitive{'s' if n > 1 else ''}", n, prims[:n]) for n in PRIMITIVE_COUNTS]
             + [(f"{n} stacked in depth", n, depth[:n]) for n in PRIMITIVE_COUNTS]
             + [(f"{n} TPMS-in-box", n, tpms[:n]) for n in TPMS_COUNTS])
+
+
+def sphere_obj(i: int, rings: int = 24, segments: int = 48) -> str:
+    """A closed UV sphere of radius 0.4, normals out, at primitive i's centre."""
+    cx, cy, cz = (1.2 * (i % 5 - 2), 1.2 * (0.5 - i // 5), 0)
+    lines = [f"v {cx:g} {cy:g} {cz + 0.4:g}"]
+    for r in range(1, rings):
+        t = math.pi * r / rings
+        for k in range(segments):
+            a = 2 * math.pi * k / segments
+            lines.append(f"v {cx + 0.4 * math.sin(t) * math.cos(a):.6f} "
+                         f"{cy + 0.4 * math.sin(t) * math.sin(a):.6f} {cz + 0.4 * math.cos(t):.6f}")
+    lines.append(f"v {cx:g} {cy:g} {cz - 0.4:g}")
+    south = 1 + (rings - 1) * segments + 1
+    ring = lambda r, k: 2 + (r - 1) * segments + k % segments  # noqa: E731, 1-based
+    for k in range(segments):
+        lines.append(f"f 1 {ring(1, k)} {ring(1, k + 1)}")
+        for r in range(1, rings - 1):
+            lines.append(f"f {ring(r, k)} {ring(r + 1, k)} {ring(r + 1, k + 1)} {ring(r, k + 1)}")
+        lines.append(f"f {south} {ring(rings - 1, k + 1)} {ring(rings - 1, k)}")
+    return "\n".join(lines) + "\n"
+
+
+def mesh_scenes(work: Path) -> list[tuple[str, int, list[Path]]]:
+    """(name, object count, mesh files) for P04 T2: one OBJ per object."""
+    meshes = []
+    for i in range(max(MESH_COUNTS)):
+        meshes.append(work / f"sphere_{i}.obj")
+        meshes[-1].write_text(sphere_obj(i))
+    return [(f"{n} imported mesh{'es' if n > 1 else ''}", n, meshes[:n]) for n in MESH_COUNTS]
 
 
 def growth(results: list[tuple[str, int, dict]], kind: str, scale: float) -> str:
@@ -241,6 +278,9 @@ def main() -> int:
     ap.add_argument("--objects", action="store_true",
                     help="P01 T4, P07: scenes of 1, 3, 5, 10 primitives side by side and "
                          "stacked in depth, and of 1, 3 TPMS-in-box")
+    ap.add_argument("--meshes", action="store_true",
+                    help="scenes of 1, 3 and 5 imported mesh objects at preview scales "
+                         "0.35 and 1.0 (P04 T2)")
     ap.add_argument("--keep", action="store_true", help="keep the scratch folder")
     ap.add_argument("--unit", help="unit id printed in each row (default P00.5, or P01.4 "
                                    "with --objects)")
@@ -258,7 +298,10 @@ def main() -> int:
     jsonl = Path(f"measurements-{date}.jsonl").resolve()
     rows, first, results = [], None, []
     try:
-        if args.objects:
+        if args.meshes:
+            todo = mesh_scenes(work)
+            unit, scales = "P04.2", OBJECT_SCALES
+        elif args.objects:
             todo = object_scenes(work)
             unit, scales = "P01.4", OBJECT_SCALES
         else:
@@ -280,12 +323,14 @@ def main() -> int:
         print(f"\nGPU: {first['glRenderer']}, GL {first['glVersion']}, Qt {first['qt']}")
         print(f"Raw results appended to {jsonl}\n")
         print("\n".join(rows))
-        if args.objects:
+        if args.objects or args.meshes:
             print()
-            for kind in ("primitive", "stacked in depth", "TPMS-in-box"):
+            kinds = (("imported mesh",) if args.meshes
+                     else ("primitive", "stacked in depth", "TPMS-in-box"))
+            for kind in kinds:
                 for scale in scales:
                     print(growth(results, kind, scale))
-        if args.field_view and not args.objects:
+        if args.field_view and not (args.objects or args.meshes):
             print("\nSnapshots, editor against dualc_field_view (800×600, default view):")
             for name, _, (graph,) in todo:
                 print(compare(args.exe, args.field_view, name, graph, work, env))

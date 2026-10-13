@@ -13,6 +13,7 @@ DualC already vendors (MIT, `examples/third_party/miniz.{h,c}`, linked through
 |---|---|
 | `scene.json` | The scene: every object, in scene order. |
 | `meshes/<n>.<ext>` | The bytes of each mesh file a graph reads, as they were on disk. `<n>` counts from 0; `<ext>` is the file's own suffix, lower case (`obj`, `ply`). |
+| `meshes/<id>.obj` | An imported mesh a graph names by `id` (P04 T2, `07-mesh-import.md` § Saving imported meshes): its welded buffers as OBJ, floats to 9 significant digits. Listed in `"meshes"` with the others; the reader also finds it by the id and reads it back into the mesh library under the same id. |
 
 E-08 named the mesh entries `meshes/<n>.bin`. They keep their file's suffix instead, so
 DualC's `FileMeshResolver`, which picks a reader by suffix, reads the extracted file as it

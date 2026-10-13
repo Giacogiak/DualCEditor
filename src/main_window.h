@@ -23,6 +23,7 @@
 class QAction;
 class QLabel;
 class QPlainTextEdit;
+class QProgressDialog;
 class ObjectsPanel;
 class ParameterPanel;
 class TransformPanel;
@@ -52,6 +53,8 @@ class MainWindow : public QMainWindow {
   static constexpr int kReloadDelayMs = 100;
 
   explicit MainWindow(float previewScale, QWidget* parent = nullptr);
+  // Cancels a Make Watertight still running and waits for its thread.
+  ~MainWindow() override;
 
   // Open `path` (a file or a Qt resource) as a scene of one object, frame it
   // and watch it. On an error the file is still watched, so the save that
@@ -70,7 +73,23 @@ class MainWindow : public QMainWindow {
   const QString& scenePath() const { return scenePath_; }
   // Add `path` as one more object, framing the whole scene; on an error as
   // openFile, and the save that fixes it adds it.
+  // A mesh file (OBJ, PLY, STL) is imported as importMesh does.
   void addFile(const QString& path);
+  // Import the mesh file `path` as one more object (P04 T2): a `mesh` node
+  // when DualC finds it watertight and it is oriented outward, else a
+  // `winding` node (mesh_solid.h). The file is not watched. A read error goes
+  // to the status bar and the log.
+  void importMesh(const QString& path);
+  // Edit > Make Watertight on `winding` object `id`: contour its winding field
+  // on a worker thread, with a progress dialog whose Cancel stops the sample and
+  // the contour. The result replaces the object's graph with a `mesh` node, one
+  // undo step. False when `id` is no winding object or a job is running.
+  bool makeWatertight(int id);
+  bool watertightRunning() const { return job_ != nullptr; }
+  // The running job's dialog, or null.
+  QProgressDialog* watertightDialog() const;
+  // The octree depth Make Watertight contours at (mesh_solid.h).
+  void setWatertightDepth(int depth) { watertightDepth_ = depth; }
   // Remove object `id` (a no-op for an unknown id). The camera stays; the last
   // object leaves the viewport empty.
   void removeObject(int id);
@@ -115,6 +134,9 @@ class MainWindow : public QMainWindow {
   void loadFinished(bool ok);
   // The selection moved to object `id`, 0 for none.
   void selectionChanged(int id);
+  // A Make Watertight ended: `ok` when its mesh replaced the object, false
+  // when it was cancelled or failed.
+  void watertightFinished(bool ok);
 
  protected:
   void dragEnterEvent(QDragEnterEvent* event) override;
@@ -122,6 +144,7 @@ class MainWindow : public QMainWindow {
   void dropEvent(QDropEvent* event) override;
 
  private:
+  struct WatertightJob;
   // A scene; each object names the file it came from (SceneObject::file).
   struct Doc {
     Scene scene;
@@ -196,6 +219,10 @@ class MainWindow : public QMainWindow {
   void reportError(const QString& file, const QString& error);
   void log(const QString& line);
   void showTiming();
+  // The job's progress, posted from its thread: DualC's stage and count.
+  void watertightProgress(int stage, qulonglong done, qulonglong total);
+  void watertightDone();
+  void updateObjectActions();
 
   Viewport* viewport_;
   QPlainTextEdit* log_;
@@ -211,6 +238,9 @@ class MainWindow : public QMainWindow {
   bool adopting_ = false;  // the document is being set to match the screen
   int shownIndex_ = 0;     // the undo index of the scene on screen
   QAction* renameAction_;
+  QAction* watertightAction_;
+  std::unique_ptr<WatertightJob> job_;
+  int watertightDepth_;
   Doc doc_;  // on screen
   LoweredScene lowered_;
   std::optional<Pending> pending_;

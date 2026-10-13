@@ -2,6 +2,8 @@
 #include "bench.h"
 #include "graph_file.h"
 #include "main_window.h"
+#include "mesh_import.h"
+#include "mesh_solid.h"
 #include "scene.h"
 #include "scene_file.h"
 #include "snapshot.h"
@@ -47,6 +49,15 @@ bool lowerGraphs(const QStringList& paths, dce::fieldgraph::GlslScene* out) {
       }
       scene = std::move(*load.scene);
       break;
+    }
+    if (isMeshFileName(path)) {
+      MeshImport im = importMeshFile(path);
+      if (!im.graph) {
+        std::fprintf(stderr, "DualCEditor: %s\n", qPrintable(im.error));
+        return false;
+      }
+      scene.add(QFileInfo(path).fileName(), std::move(*im.graph));
+      continue;
     }
     GraphParse parse = parseGraphFile(path);
     if (!parse.graph) {
@@ -122,8 +133,9 @@ int main(int argc, char* argv[]) {
   parser.addOption(benchFramesOption);
   parser.addPositionalArgument(
       "graph",
-      "Field graph to open (.json or .fld shorthand), or a .dcscene. Default: "
-      "gyroid_box.json. Several graphs make a scene of one object per graph.",
+      "Field graph to open (.json or .fld shorthand), a mesh to import (.obj, .ply, "
+      ".stl), or a .dcscene. Default: gyroid_box.json. Several graphs or meshes make a "
+      "scene of one object each.",
       "[graph...]");
   parser.process(*app);
   const QStringList graphs = parser.positionalArguments();
@@ -139,7 +151,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  const bool sceneFile = graphs.size() > 1 || isSceneFileName(graph);
+  const bool sceneFile = graphs.size() > 1 || isSceneFileName(graph) || isMeshFileName(graph);
   if (parser.isSet(snapshotOption) && sceneFile) {
     dce::fieldgraph::GlslScene scene;
     if (!lowerGraphs(graphs, &scene)) return 2;
@@ -184,7 +196,11 @@ int main(int argc, char* argv[]) {
   // status bar and the log, and the file is watched, so fixing it renders it.
   MainWindow window(previewScale);
   window.resize(1200, 800);
-  window.openFile(graph);
+  // A mesh is imported into the empty scene; a graph or a scene opens.
+  if (isMeshFileName(graph))
+    window.addFile(graph);
+  else
+    window.openFile(graph);
   for (int i = 1; i < graphs.size(); ++i) window.addFile(graphs[i]);
   window.show();
 

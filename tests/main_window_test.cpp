@@ -29,6 +29,9 @@
 #include <QImage>
 #include <QMimeData>
 #include <QProcess>
+#include <QProgressDialog>
+#include <QPushButton>
+#include <QTimer>
 #include <QSet>
 #include <QStatusBar>
 #include <QSurfaceFormat>
@@ -40,6 +43,8 @@
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
+#include <string>
+#include <algorithm>
 
 namespace {
 
@@ -50,6 +55,10 @@ void check(bool ok, const char* what) {
   std::fprintf(ok ? stdout : stderr, "main_window_test: %s %s\n", ok ? "ok  " : "FAIL",
                what);
   if (!ok) ++failures;
+}
+
+void check(bool ok, const std::string& what) {
+  check(ok, what.c_str());
 }
 
 template <class Pred>
@@ -499,6 +508,79 @@ int main(int argc, char* argv[]) {
     check(vp.scene().nodeCount == nodes, "a broken shader keeps the scene");
     idle(500);
     check(vp.grabFramebuffer() == before, "a broken shader leaves the image in place");
+  }
+
+  // Import as a solid (P04 T2): a closed cube and an open box dropped on a
+  // fresh window give one `mesh` object and one `winding` object, the Objects
+  // dock says which, and the status bar names the grid they preview at. Make
+  // Watertight on the box runs on a thread while the window keeps processing
+  // events, shows progress, and replaces it with a `mesh` object, one undo
+  // step; cancelled at once, it changes nothing.
+  {
+    MainWindow m(1.0f);
+    m.resize(800, 600);
+    m.show();
+    const QString closed = tmp.filePath("closed.obj");
+    const QString open = tmp.filePath("open.obj");
+    write(closed, kCubeObj);
+    QByteArray box(kCubeObj);
+    box.chop(QByteArray("f 4 1 5\nf 4 5 8\n").size());
+    write(open, box);
+    check(drop(m, closed) && nextLoad(m, 30000) == 1, "a dropped closed .obj loads");
+    check(drop(m, open) && nextLoad(m, 30000) == 1, "a dropped open .obj loads");
+    const auto& objs = m.scene().objects();
+    check(objs.size() == 2 && objs[0].graph.op == "mesh" && objs[1].graph.op == "winding",
+          "the closed mesh is a mesh object, the open one a winding object");
+    check(objs.size() == 2 && m.objects()->kind(objs[0].id) == "mesh" &&
+              m.objects()->kind(objs[1].id) == "winding",
+          "the Objects dock shows which is which");
+    check(m.timingText().contains("mesh grid 96³"),
+          "the status bar names the preview grid: " + m.timingText().toStdString());
+    const int soup = objs.size() == 2 ? objs[1].id : 0;
+    m.selectObject(soup);
+    m.setWatertightDepth(7);
+    int ticks = 0, maxValue = 0;
+    QTimer ticker;
+    QObject::connect(&ticker, &QTimer::timeout, [&] {
+      ++ticks;
+      if (QProgressDialog* d = m.watertightDialog()) maxValue = std::max(maxValue, d->value());
+    });
+    ticker.start(1);
+    int finished = -1;
+    QObject::connect(&m, &MainWindow::watertightFinished, [&](bool ok) { finished = ok; });
+    const int steps = m.undoStack()->count();
+    check(m.makeWatertight(soup) && m.watertightRunning() && m.watertightDialog(),
+          "Make Watertight starts on the winding object");
+    check(!m.makeWatertight(soup), "a second job is refused while one runs");
+    runUntil([&] { return finished != -1; }, 60000);
+    ticker.stop();
+    check(finished == 1, "Make Watertight finishes");
+    std::printf("main_window_test: make watertight: %d timer ticks while it ran, progress %d/1000\n",
+                ticks, maxValue);
+    check(ticks > 1, "the event loop ran while it worked (the UI does not freeze)");
+    check(maxValue > 0, "the dialog showed progress");
+    check(nextLoad(m, 30000) != 0 && m.scene().find(soup) &&
+              m.scene().find(soup)->graph.op == "mesh" && m.objects()->kind(soup) == "mesh",
+          "the winding object became a mesh object");
+    check(m.undoStack()->count() == steps + 1 &&
+              m.undoStack()->undoText().startsWith("Make watertight"),
+          "it is one undo step: " + m.undoStack()->undoText().toStdString());
+    m.undoStack()->undo();
+    runUntil([&] { return !m.viewport()->building() && m.scene().find(soup) &&
+                          m.scene().find(soup)->graph.op == "winding"; }, 30000);
+    check(m.scene().find(soup) && m.scene().find(soup)->graph.op == "winding",
+          "undo brings the winding object back");
+    finished = -1;
+    m.selectObject(soup);
+    check(m.makeWatertight(soup), "Make Watertight starts again");
+    // The dialog's Cancel button, as a click would press it.
+    if (QPushButton* cancel = m.watertightDialog()->findChild<QPushButton*>()) cancel->click();
+    runUntil([&] { return finished != -1; }, 60000);
+    check(finished == 0 && m.scene().find(soup)->graph.op == "winding" &&
+              m.undoStack()->count() == steps + 1 &&
+              m.statusBar()->currentMessage().contains("cancelled"),
+          "cancelled, it leaves the object and the history alone: " +
+              m.statusBar()->currentMessage().toStdString());
   }
 
   // The command-line argument, through --snapshot.

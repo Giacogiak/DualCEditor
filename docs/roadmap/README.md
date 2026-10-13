@@ -2,12 +2,13 @@
 
 ## Current focus
 
-**Now: P04, import (`../../plan/50_P04_import.md`).** E-09 is decided (OBJ, PLY and STL;
-3MF deferred). T1, the mesh readers, is done (`../design/07-mesh-import.md`,
-`../../HANDOFF_P04_TASK1.md`): the three formats read into welded triangle buffers, a
-malformed file gives a message, and a read mesh is named in a graph by id through DualC's
-`InMemoryMeshResolver`. Next is T2: the drop, `mesh` or `winding` by DualC's diagnostics,
-and "Make watertight".
+**Done: P04, import (`../../plan/50_P04_import.md`).** E-09 is decided (OBJ, PLY and STL;
+3MF deferred). T1, the mesh readers (`../design/07-mesh-import.md`,
+`../../HANDOFF_P04_TASK1.md`); T2, import as a solid (`../../HANDOFF_P04_TASK2.md`): a
+dropped mesh becomes a `mesh` object when DualC finds it watertight and it is oriented,
+else a `winding` object; `Edit ▸ Make Watertight` contours a winding object on a worker
+thread, with progress and Cancel; `.dcscene` carries imported meshes. Its GTX check (E-22's
+trigger, `--meshes`) is queued.
 
 Done: P03, scene model (`../../plan/40_P03_scene_model.md`). T1, operation history and
 undo (`../design/04-scene-model.md`, `../../HANDOFF_P03_TASK1.md`); T2, `.dcscene`

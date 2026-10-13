@@ -67,6 +67,8 @@ add_library(dualceditor_core STATIC
   src/main_window.h
   src/mesh_import.cpp
   src/mesh_import.h
+  src/mesh_solid.cpp
+  src/mesh_solid.h
   src/mesh_library.cpp
   src/mesh_library.h
   src/orbit_camera.cpp

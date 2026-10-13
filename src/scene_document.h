@@ -71,7 +71,9 @@ class SceneDocument : public QObject {
   // edits go with the old graph, and come back with it on undo. A non-empty
   // `meshDir` replaces the object's too: an object loaded from a .dcscene
   // resolves meshes in the scene's extracted folder, its file beside itself.
-  void replaceGraph(int id, dce::fieldgraph::GraphNode graph, QString meshDir = {});
+  // The step is named "<verb> <name>", Reload by default.
+  void replaceGraph(int id, dce::fieldgraph::GraphNode graph, QString meshDir = {},
+                    const QString& verb = {});
   // Group the edits until endMacro into one undo step, and one `changed`.
   void beginMacro(const QString& text);
   void endMacro();

@@ -395,3 +395,21 @@ measure, mains power, other GPU work closed, the renderer checked.
 3. Optional, in the live window: add `--keep`, and the script prints the folder that holds
    the scene files. Open the ten primitives, `DualCEditor primitive_*.fld` in that folder,
    and orbit at `--preview-scale 0.35` and `1.0`. Do ten objects feel as responsive as one?
+
+## Imported meshes (P04 T2)
+
+E-22's trigger (`03-go-no-go.md`, item 3): frame time with several mesh objects. Owed on
+the GTX 1050 Ti; the dev box cannot measure (E-04).
+
+```bash
+python scripts/measure_viewport.py --meshes --prime
+```
+
+Scenes of 1, 3 and 5 closed UV spheres (radius 0.4, 24 × 48, written as OBJ), side by
+side at P01's primitive positions, each imported as a `mesh` node baked to 96³, at preview
+scales 0.35 and 1.0, 1280 × 800. Paste the rows and the per-object growth line here.
+E-22 fires when the settled frame at 1.0 misses the frame target of `03-go-no-go.md`.
+
+| Date | Unit | Scene | Scale | compile ms | moving GPU ms | settled GPU ms | Where |
+|---|---|---|---|---|---|---|---|
+| — | P04.2 | owed | | | | | GTX 1050 Ti |

@@ -154,3 +154,9 @@ target_link_libraries(mesh_import_test PRIVATE dualceditor_core)
 dualceditor_target_options(mesh_import_test)
 add_test(NAME mesh_import
   COMMAND mesh_import_test ${CMAKE_CURRENT_SOURCE_DIR}/data/meshes)
+
+add_executable(mesh_solid_test mesh_solid_test.cpp)
+target_link_libraries(mesh_solid_test PRIVATE dualceditor_core)
+dualceditor_target_options(mesh_solid_test)
+add_test(NAME mesh_solid
+  COMMAND mesh_solid_test ${CMAKE_CURRENT_SOURCE_DIR}/data/meshes)

@@ -94,12 +94,66 @@ codegen a copy of the graph (`meshIdsAsPaths`), with each id rewritten as the pa
 path, and no file is written. When DualC's codegen takes `id`, the adapter goes: this is a
 question for the owner (DualC).
 
+## Import as a solid (P04 T2)
+
+`src/mesh_solid.{h,cpp}`, GL-free. A dropped mesh file (or one named on the command line,
+or by `File ▸ Add…`) is read, welded, added to the library, and checked (`checkMesh`):
+
+- **DualC's facts:** open (boundary) and non-manifold edge counts, read from DualC's
+  `MeshSource` (`boundaryEdgeCount`, `nonManifoldEdgeCount`), the counts
+  `dualContourMesh` copies into `Diagnostics::inputBoundaryEdges`,
+  `inputNonManifoldEdges` and `inputWatertight`. They are kept in a `dualc::Diagnostics`.
+  Building a `MeshSource` is cheaper than a sample, which is the only call that fills
+  `Diagnostics` itself.
+- **Ours:** orientation. DualC does not report it. An edge two triangles walk in the
+  same direction is misoriented, and the signed volume (divergence theorem) must be
+  positive, or every normal points in.
+
+A watertight mesh with no misoriented edge and a positive volume becomes a `mesh(id=…)`
+node; any other a `winding(id=…)` node. The object is named after the file, and the file
+is not watched. The Objects dock draws the kind after the name, `[mesh]` or `[winding]`
+(`meshObjectKind`; a delegate, so the name editor gets the name alone).
+
+### Make watertight
+
+`Edit ▸ Make Watertight` on a `winding` object: `makeWatertight` builds DualC's
+`WindingNumberField` over the library mesh and contours it with `dualContourField`
+(octree depth 7 by default, `kWatertightDepth`; `SignMethod::GENERALIZED_WINDING_NUMBER`),
+then cleans the output as an import is cleaned: polygons fanned, `weldVertices`. The
+result is added to the library and replaces the object's graph with `mesh(id=…)`, one undo
+step named `Make watertight <name>` (`SceneDocument::replaceGraph` with a verb). A result
+that comes out non-manifold stays a `winding` node over the new mesh.
+
+Threading (`MainWindow::makeWatertight`): the job runs on a `QThread::create` thread with
+a `dualc::CancelToken` and a `dualc::ProgressSink`. The sink is called on the job's thread
+(DualC calls it on the calling thread) and posts each report to the window with a queued
+call. A window-modal `QProgressDialog`, shown, not run with `exec`, takes the Sample stage
+as the first half of its bar and the Contour stage as the second; its Cancel requests the
+token, and DualC throws `dualc::Cancelled` at its next checkpoint, in either stage. One
+job at a time. The window's destructor requests the token and joins the thread. If the
+object's graph changed meanwhile, the result is dropped.
+
+**Bakes cannot be cancelled (DualC D-45).** The preview of the result bakes the mesh to a
+grid during the compile that follows; the dialog says so.
+
+### Preview grid
+
+Every `mesh` or `winding` node is baked by the codegen to a 3D texture of
+`kDefaultMeshGridRes` (96) samples per axis, over the object's local trace box. The
+status bar's timing label ends with `mesh grid 96³` while the scene on screen has one;
+that label is the plan's "preview badge".
+
+### Saving imported meshes
+
+`saveSceneFile` writes each library mesh a graph names by id as the entry
+`meshes/<id>.obj` (every float with 9 significant digits, so it reads back to the same
+bits), and the graph keeps its id. `loadSceneFile` reads each such entry back with the OBJ
+reader, adds it to the library, and sets the id the read gives, which is the same one.
+
 ## Not yet
 
-- **Saving.** A `.dcscene` (`05-dcscene-format.md`) leaves an `id` source alone and embeds
-  only files named by `path`. A scene holding an imported mesh therefore saves, but loads
-  only in the process that imported the mesh. The buffers must go in the archive, which is
-  for P04 T2, when the drop makes such objects.
 - **3MF** is deferred (E-09).
 - **Size.** Reading and welding hold the whole file and the soup in memory. No large mesh
-  has been timed.
+  has been timed, and neither has Make Watertight on one (the 10-triangle open box takes
+  under a second at depth 6 on the dev box).
+- **Grid resolution is fixed** at 96³ per mesh node. A setting for it is not planned yet.

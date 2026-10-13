@@ -1,5 +1,7 @@
 #include "scene_file.h"
 
+#include "mesh_library.h"
+
 #include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
@@ -145,6 +147,59 @@ QString meshFile(const QString& path, const QString& meshDir) {
   return path;
 }
 
+// The library id a `mesh(id=...)` or `winding(id=...)` source names (an
+// imported mesh, mesh_library.h), or null.
+std::string* libraryId(fg::GraphNode& n) {
+  if (n.op != "mesh" && n.op != "winding") return nullptr;
+  const auto it = n.params.find("id");
+  return it != n.params.end() && it->second.kind == fg::ParamValue::Kind::String
+             ? &it->second.str
+             : nullptr;
+}
+
+// The archive entry an imported mesh is written to: meshes/<id>.obj.
+QString libraryEntry(const std::string& id) {
+  return kMeshPrefix + QString::fromStdString(id) + ".obj";
+}
+
+// `mesh` as OBJ text, every float written with 9 significant digits so it
+// reads back to the same bits, and so to the same library id.
+QByteArray objText(const MeshBuffers& mesh) {
+  QByteArray out;
+  for (std::size_t i = 0; i + 2 < mesh.vertices.size(); i += 3)
+    out += "v " + QByteArray::number(double(mesh.vertices[i]), 'g', 9) + ' ' +
+           QByteArray::number(double(mesh.vertices[i + 1]), 'g', 9) + ' ' +
+           QByteArray::number(double(mesh.vertices[i + 2]), 'g', 9) + '\n';
+  for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3)
+    out += "f " + QByteArray::number(mesh.indices[i] + 1) + ' ' +
+           QByteArray::number(mesh.indices[i + 1] + 1) + ' ' +
+           QByteArray::number(mesh.indices[i + 2] + 1) + '\n';
+  return out;
+}
+
+// Read every imported mesh `n` names back into the library from its entry.
+// The read gives the id back (the same buffers); it is set again regardless.
+bool loadLibraryMeshes(fg::GraphNode& n, const std::map<QString, QByteArray>& entries,
+                       const QString& where, QString* error) {
+  if (std::string* id = libraryId(n)) {
+    const QString entry = libraryEntry(*id);
+    const auto bytes = entries.find(entry);
+    if (bytes == entries.end()) {
+      *error = QString("%1: imported mesh \"%2\" is not in the archive").arg(where, entry);
+      return false;
+    }
+    MeshRead read = readMeshBytes(bytes->second, MeshFormat::Obj, entry);
+    if (!read.mesh) {
+      *error = where + ": " + read.error;
+      return false;
+    }
+    *id = addLibraryMesh(std::move(*read.mesh));
+  }
+  for (fg::GraphNode& c : n.in)
+    if (!loadLibraryMeshes(c, entries, where, error)) return false;
+  return true;
+}
+
 // The meshes of a scene being written: one entry per distinct content.
 struct MeshTable {
   std::map<QByteArray, QString> byHash;  // sha256 + suffix -> entry name
@@ -174,6 +229,18 @@ struct MeshTable {
         it = byHash.emplace(key, name).first;
       }
       path = it->second.toStdString();
+    } else if (const std::string* id = libraryId(n)) {
+      // An imported mesh keeps its id; its buffers go in as OBJ.
+      const QString entry = libraryEntry(*id);
+      if (!entries.count(entry)) {
+        const std::shared_ptr<const MeshBuffers> mesh = findLibraryMesh(*id);
+        if (!mesh) {
+          *error = QString("object %1 (%2) names imported mesh %3, which is not loaded")
+                       .arg(QString::number(o.id), o.name, QString::fromStdString(*id));
+          return false;
+        }
+        entries[entry] = objText(*mesh);
+      }
     }
     for (fg::GraphNode& c : n.in)
       if (!embed(c, o, error)) return false;
@@ -431,6 +498,7 @@ SceneLoad loadSceneFile(const QString& path) {
           v;
     }
     if (!nodeFromJson(j["graph"], where + ": graph", &o.graph, &out.error)) return out;
+    if (!loadLibraryMeshes(o.graph, *entries, where, &out.error)) return out;
     o.meshDir = meshDir;
     // The file it came from, when it is still there: watched for reloads.
     const QString rel = j["file"].toString();

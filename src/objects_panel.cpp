@@ -1,7 +1,10 @@
 #include "objects_panel.h"
 
+#include "mesh_solid.h"
+
 #include <QKeyEvent>
 #include <QPixmap>
+#include <QStyledItemDelegate>
 
 #include <algorithm>
 #include <cmath>
@@ -10,6 +13,21 @@ namespace {
 
 constexpr int kIdRole = Qt::UserRole;
 constexpr int kNameRole = Qt::UserRole + 1;  // the name the row was given
+constexpr int kKindRole = Qt::UserRole + 2;  // "mesh", "winding" or empty
+
+// Draws an imported object's kind after its name ("bunny.stl  [winding]"),
+// while the text the name editor gets stays the name alone.
+class KindDelegate : public QStyledItemDelegate {
+ public:
+  using QStyledItemDelegate::QStyledItemDelegate;
+
+ protected:
+  void initStyleOption(QStyleOptionViewItem* option, const QModelIndex& index) const override {
+    QStyledItemDelegate::initStyleOption(option, index);
+    const QString kind = index.data(kKindRole).toString();
+    if (!kind.isEmpty()) option->text += QString("  [%1]").arg(kind);
+  }
+};
 
 QIcon swatch(const SceneColour& colour) {
   QPixmap pixmap(16, 16);
@@ -22,6 +40,7 @@ QIcon swatch(const SceneColour& colour) {
 ObjectsPanel::ObjectsPanel(QWidget* parent) : QListWidget(parent) {
   setSelectionMode(QAbstractItemView::SingleSelection);
   setUniformItemSizes(true);
+  setItemDelegate(new KindDelegate(this));
   connect(this, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
     if (updating_) return;
     const int id = item->data(kIdRole).toInt();
@@ -58,7 +77,14 @@ void ObjectsPanel::setObjects(const std::vector<SceneObject>& objects) {
     item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable |
                    Qt::ItemIsEditable);
     item->setCheckState(o.visible ? Qt::Checked : Qt::Unchecked);
-    item->setToolTip(QString("object %1").arg(o.id));
+    const QString kind = meshObjectKind(o.graph);
+    item->setData(kKindRole, kind);
+    item->setToolTip(
+        kind == "mesh"      ? QString("object %1: an imported mesh, watertight").arg(o.id)
+        : kind == "winding" ? QString("object %1: an imported mesh, not watertight; its inside "
+                                      "is the winding number. Edit > Make Watertight")
+                                  .arg(o.id)
+                            : QString("object %1").arg(o.id));
     if (o.id == selected) item->setSelected(true);
   }
   updating_ = false;
@@ -93,6 +119,11 @@ void ObjectsPanel::select(int id) {
   } else {
     clearSelection();
   }
+}
+
+QString ObjectsPanel::kind(int id) const {
+  const QListWidgetItem* item = row(id);
+  return item ? item->data(kKindRole).toString() : QString();
 }
 
 QListWidgetItem* ObjectsPanel::row(int id) const {

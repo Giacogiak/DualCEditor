@@ -7,7 +7,8 @@
 #include <vector>
 
 // The Objects dock's contents: one row per scene object, in scene order, with
-// a visibility checkbox, a colour swatch and the object's name. One row at a
+// a visibility checkbox, a colour swatch and the object's name, followed for
+// an imported mesh by its kind, [mesh] or [winding]. One row at a
 // time is selected. Delete (QKeySequence::Delete) on the list asks to remove
 // the selected object; F2 or a double click edits its name. Nothing here touches the scene or GL: the window acts
 // on the signals (docs/command_reference/01-viewport.md § Objects).
@@ -27,6 +28,9 @@ class ObjectsPanel : public QListWidget {
   // The id of the selected object, 0 for none; select 0 clears.
   int selectedId() const;
   void select(int id);
+  // The kind shown after an imported object's name: "mesh" (watertight) or
+  // "winding" (meshObjectKind), empty for another object.
+  QString kind(int id) const;
   // The row of object `id`, or nullptr.
   QListWidgetItem* row(int id) const;
 
