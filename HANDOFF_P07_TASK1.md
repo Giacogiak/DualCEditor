@@ -2,8 +2,8 @@
 
 Date: 2026-10-13. Plan: `plan/35_P07_render_scaling.md` § T1. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: done** on the automatic checks. The acceptance criteria are met and the gate passes. A GTX re-run of the
-cost-rule version is asked for (§ Human check asked).
+**Status: done.** The automatic checks pass, and the owner's GTX run of the cost-rule version (6f3a8bd)
+is recorded (§ Owner's GTX run at 6f3a8bd). Its cold compile is not measured; that moves to P07.3.
 
 History. The first session returned `blocked`: the development box's GL stack had wedged.
 Giacomo rebooted it and answered on 2026-10-13 (§ The owner's answers). This second session
@@ -157,3 +157,28 @@ costly objects; T3 or the owner decides.
   already does it for dock edits.
 - P07.3: `measure_viewport.py --objects` now runs 3 families. It still labels rows `P01.4`;
   relabel them P07.3 by hand, or add a flag.
+
+## Owner's GTX run at 6f3a8bd (Giacomo, 2026-10-13)
+
+GL 3.3.0 NVIDIA 441.93, Qt 6.8.3, Windows 10, Release, at 6f3a8bd (option C). Raw: the last
+20 lines of `docs/roadmap/02-measurements-p07.jsonl`; table in `02-measurements.md`
+§ GTX 1050 Ti at 6f3a8bd.
+
+Against the expectations in § Human check asked:
+- **0 / 480 000 px** in each of the ten `--objects` scenes (`--snapshot`, 8b9baf8 against
+  6f3a8bd). The owner's images are byte-identical to the 8b9baf8 images of the first bundle.
+- **Primitive slope +0.29 ms** per object at 1.0 (expected about +0.28; dd92129 gave +0.40).
+- **TPMS-in-box slope +1.94 ms** per box at 1.0 (expected near +1.90; kept).
+- Stacked in depth +0.12 ms per object at 1.0 (dd92129 +0.18). Still a cheap-object family.
+
+**Not confirmed: the primitive compile.** Every compile in this run took 12–60 ms, TPMS
+included, so the driver's disk shader cache most likely served them. The expected "670 ms
+for 10 primitives, cold" was not measured. The cold figure needs the driver's GL shader cache
+cleared before the run. That is P07 T3's measurement, and the `--objects` rows must be
+relabelled P07.3 (see § For the next unit).
+
+The owner's note on the bundle: wall times are back to the 2026-10-12 level (1 primitive
+settled 2.4 ms), unlike the noisy dd92129 run.
+
+Owner's decisions on this unit: P07.1 accepted with the GTX `main_window` failure open
+(its own item); culling option C.

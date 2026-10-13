@@ -260,6 +260,29 @@ These rows are at T1's first commit. On the owner's decision (2026-10-13, option
 culling now applies to costly objects only (`../design/03-scene-lowering.md` § The cost
 rule). A scene of primitives is P01's shader again. P07 T3 re-measures at T2's commit.
 
+### GTX 1050 Ti at 6f3a8bd (P07 T1, option C)
+
+The owner ran `scripts/measure_viewport.py --objects --keep` on the GTX at 6f3a8bd (cull
+only costly objects), same conditions as above. Its 20 raw lines are appended to
+`02-measurements-p07.jsonl` (commit 6f3a8bd); the script still labels them `P01.4`.
+
+| Family | Preview scale | Per added object, settled GPU ms, b011b24 (no culling) | dd92129 (culling all) | 6f3a8bd (option C) |
+|---|---|---|---|---|
+| primitives (1, 3, 5, 10) | 1.0 | +0.28 | +0.40 | **+0.29** |
+| stacked in depth (1, 3, 5, 10) | 1.0 | — | +0.18 | +0.12 |
+| TPMS-in-box (1, 3) | 1.0 | +2.49 | +1.90 | **+1.94** |
+| TPMS-in-box (1, 3) | 0.35 | +2.28 | +1.95 | +1.98 |
+
+Settled GPU ms at 1.0: 10 primitives 3.2 (dd92129 4.2); 3 TPMS-in-box 6.6 (dd92129 6.6).
+`--snapshot` of all ten `--objects` scenes at 8b9baf8 and at 6f3a8bd: **0 / 480 000 px**
+differ in each.
+
+Compile times in this run were 12–60 ms for every scene, TPMS included (25–28 ms for 3
+TPMS-in-box at 0.35). The driver's disk shader cache most likely served them. **So this run
+does not measure cold compile**, and the claim "primitive compile back near 670 ms cold" is
+not checked. The cold figure is P07 T3's (`plan/35_P07_render_scaling.md`), after the GL
+driver's shader cache is cleared.
+
 ### How to measure (P01 T4 checklist)
 
 Same set-up as the P00 T5 checklist above, steps 1 and 2: a Release build at the commit to
