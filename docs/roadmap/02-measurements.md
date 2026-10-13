@@ -283,6 +283,36 @@ does not measure cold compile**, and the claim "primitive compile back near 670 
 not checked. The cold figure is P07 T3's (`plan/35_P07_render_scaling.md`), after the GL
 driver's shader cache is cleared.
 
+### How to measure (P07 T3 checklist)
+
+P07 T3 re-measures at T2's commit or later (4b89008 and after; the P07.3 commit changes
+only the script and the docs). Same set-up as the P01 T4 checklist below: a Release build,
+mains power, other GPU work closed, the renderer checked.
+
+1. **Clear the driver's shader cache**, with every DualCEditor window closed, so that each
+   scene's first run (at 0.35) is a cold compile. P07 T1's run at 6f3a8bd skipped this, and
+   its compiles (12–60 ms) came from the cache.
+   - Windows: delete the contents of `%LOCALAPPDATA%\NVIDIA\GLCache`.
+   - Linux: delete `~/.nv/GLCache` (or `$__GL_SHADER_DISK_CACHE_PATH` if set).
+2. **Time the scenes.** From the repository root:
+   - Windows: `python scripts/measure_viewport.py --objects --unit P07.3 --keep`
+   - Linux PRIME: add `--prime`.
+
+   Twenty runs: ten scenes (1, 3, 5, 10 primitives side by side; the same stacked in depth;
+   1, 3 TPMS-in-box) at 0.35 and 1.0. The script prints the `GPU: …` line, twenty rows, six
+   *per added object* lines and the folder it kept. It appends the raw JSON to
+   `measurements-<date>.jsonl`.
+3. **The live window, cold.** Clear the shader cache again (step 1), so the window's
+   compile is not served by step 2. In the kept folder, open the first two TPMS-in-box:
+   `DualCEditor tpms_box_0.fld tpms_box_1.fld`. Wait for the image, then start orbiting
+   with a held drag and, while still orbiting, drop `tpms_box_2.fld` on the window (or
+   `File ▸ Open` it). Note:
+   - whether the view kept turning while the status bar read `compile …`;
+   - the `compile C ms` the status bar shows once the three boxes are on screen.
+4. **Paste back** the `GPU: …` line, the twenty rows, the six growth lines, the raw JSON
+   lines, the two answers of step 3, and whether the build was the one at the printed
+   commit.
+
 ### How to measure (P01 T4 checklist)
 
 Same set-up as the P00 T5 checklist above, steps 1 and 2: a Release build at the commit to

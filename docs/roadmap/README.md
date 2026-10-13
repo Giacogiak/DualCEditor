@@ -9,6 +9,11 @@ T1 is done: costly objects (TPMS, lattices, meshes, …) skip their SDF while `p
 from their world box than the nearest object, and cheap analytic objects are written as in
 P01 (`../design/03-scene-lowering.md` § Culling). The owner's GTX run of a first version,
 which culled every object, is in `02-measurements.md` § With per-object culling (P07 T1).
+T2 is done: a structural edit lowers, compiles and links on a compile thread, and the
+viewport draws the old image until the new program links (`../design/01-render-path.md`
+§ Asynchronous compile). The owner saw the window keep orbiting on the GTX at 4b89008.
+T3 waits on the owner's GTX run, cold shader cache, with `02-measurements.md` § How to
+measure (P07 T3 checklist).
 
 **Known failure, its own item (owner, 2026-10-13):** on the GTX 1050 Ti, `main_window`
 fails one check, "the .fld renders a different image" (`tests/main_window_test.cpp:220`),

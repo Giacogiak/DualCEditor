@@ -70,9 +70,21 @@ the commit of T2, plus the depth-stacked family of T1.
 #### Acceptance criteria
 - The rows are in `docs/roadmap/02-measurements.md`, with the growth per added object
   beside P01.4's (+0.28 ms per primitive, +2.49 ms per TPMS-in-box, settled GPU at 1.0).
-- The per-primitive slope of the planar family falls well below P01.4's.
+- The per-primitive slope of the planar family stays near P01.4's (+0.28 ms): since the
+  owner's option C (P07.1), primitives are not culled. The TPMS-in-box slope falls below
+  P01.4's +2.49 ms. *(Corrected by P07.3: the criterion as first written, "falls well
+  below P01.4's", contradicts option C and the 6f3a8bd run, +0.29 ms.)*
+- The cold compile of each scene (its first run, after the driver's shader cache is
+  cleared) is beside P01.4's (670 ms for 10 primitives, 1210 ms for 3 TPMS-in-box).
 - The owner adds a third TPMS-in-box in the live window and reports whether the window
   stays responsive while it compiles, and the compile ms the status bar shows.
+
+#### Notes (P07.3, 2026-10-13)
+Built: `--unit` on `scripts/measure_viewport.py`, so the rows read `P07.3`, and the owner's
+checklist (`docs/roadmap/02-measurements.md` § How to measure (P07 T3 checklist)), which
+clears the shader cache before the run and before the live-window check. Criterion 2 is
+corrected above, and a cold-compile criterion added (P07.1 asked for the cold figure). The
+measurement itself is the owner's (`HANDOFF_P07_TASK3.md`).
 
 ## Exit criteria
 - Tasks T1 to T3 are met. `python scripts/check.py` is green.

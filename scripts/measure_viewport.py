@@ -6,6 +6,7 @@ in docs/roadmap/02-measurements.md. The owner runs it on the GTX 1050 Ti laptop.
   python scripts/measure_viewport.py --prime            # Linux PRIME: offload to the NVIDIA GPU
   python scripts/measure_viewport.py --field-view PATH  # also diff snapshots against dualc_field_view
   python scripts/measure_viewport.py --objects          # P01 T4, P07: frame time against object count
+  python scripts/measure_viewport.py --objects --unit P07.3   # label the rows with another unit
 
 Without --objects, each P00 scene runs at preview scales 0.35, 0.5 and 1.0. With
 --objects, scenes of 1, 3, 5 and 10 analytic primitives side by side, of 1, 3, 5 and 10
@@ -241,6 +242,8 @@ def main() -> int:
                     help="P01 T4, P07: scenes of 1, 3, 5, 10 primitives side by side and "
                          "stacked in depth, and of 1, 3 TPMS-in-box")
     ap.add_argument("--keep", action="store_true", help="keep the scratch folder")
+    ap.add_argument("--unit", help="unit id printed in each row (default P00.5, or P01.4 "
+                                   "with --objects)")
     args = ap.parse_args()
 
     env = dict(os.environ)
@@ -261,6 +264,7 @@ def main() -> int:
         else:
             todo = [(name, 1, [graph]) for name, graph in scenes(args.samples, work)]
             unit, scales = "P00.5", SCALES
+        unit = args.unit or unit
         with jsonl.open("a") as out:
             for name, n, graphs in todo:
                 for scale in scales:
