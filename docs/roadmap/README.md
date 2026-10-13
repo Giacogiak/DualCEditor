@@ -48,4 +48,5 @@ P07 (above), then P03, which waits on E-08 (`../decisions/02-open.md`).
 - `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00 and P01.
 - `02-measurements-p00.jsonl` — the raw `--bench` output of the owner's two P00.5 runs on the GTX 1050 Ti (2026-10-10).
 - `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).
+- `02-measurements-p07.jsonl` — the raw `--bench` output of the owner's run at P07.1's commit dd92129 (culling) on the GTX 1050 Ti (2026-10-13).
 - `03-go-no-go.md` — P02's verdict from the measurements: what met the feasibility target, what missed, the deferred items triggered, and the plan edits proposed for P03–P06.

@@ -220,6 +220,44 @@ Before the owner's run, on the development box only, to check the tooling, not a
 Settled GPU ms: primitives 1.8 / 4.3 / 4.0 / 15.3 for 1 / 3 / 5 / 10, TPMS-in-box 22.4 / 61.5
 for 1 / 3. Per added object at 1.0, settled GPU: primitives +1.57 ms, TPMS-in-box +20.2 ms.
 
+## With per-object culling (P07 T1)
+
+The owner ran `scripts/measure_viewport.py --objects` on the GTX 1050 Ti on 2026-10-13, at
+dd92129 (P07 T1, culling, `../design/03-scene-lowering.md` § Culling). Conditions as
+P01 T4 above: Windows 10, driver 441.93 (GL 3.3.0), Qt 6.8.3, mains power, Release. The raw
+JSON is `02-measurements-p07.jsonl`; the script labels its rows `P01.4`. The new family is
+*N stacked in depth*: the same primitives in a column along the default view axis.
+
+| Family | Preview scale | Per added object, settled GPU ms, b011b24 (no culling) | dd92129 (culling) |
+|---|---|---|---|
+| primitives (1, 3, 5, 10) | 1.0 | +0.28 | +0.40 |
+| primitives (1, 3, 5, 10) | 0.35 | +0.34 | +0.40 |
+| stacked in depth (1, 3, 5, 10) | 1.0 | — | +0.18 |
+| TPMS-in-box (1, 3) | 1.0 | +2.49 | +1.90 |
+| TPMS-in-box (1, 3) | 0.35 | +2.28 | +1.95 |
+
+Settled GPU ms at 1.0: 10 primitives 3.2 → 4.2; 3 TPMS-in-box 7.6 → 6.6; 1 TPMS-in-box
+2.6 → 2.8; 10 stacked in depth 2.3. Cold compile (first run, at 0.35): 10 primitives
+670 → 2009 ms; 3 TPMS-in-box 1210 → 3503 ms. Warm compiles 17–93 ms. Wall times were
+noisier than on 2026-10-12 in every scene (1 primitive settled wall 2.7 → 9.3 ms); read the
+GPU columns.
+
+`--snapshot` of all ten `--objects` scenes at 8b9baf8 and at dd92129: 0 / 480 000 px differ
+in each. The owner opened 3 TPMS-in-box in the window: nothing missing, orbiting fine.
+
+Findings (P07 T1):
+- **The culling does not change the image** on the GTX (0 px in every scene), nor on llvmpipe
+  (`scene_render_test`).
+- **It does not lower the planar primitive slope** (+0.28 → +0.40 ms). For a sphere or a box,
+  the box test costs about as much as the SDF it would skip. In addition, the first visible
+  object in scene order is always evaluated, because nothing is nearer yet.
+- **It lowers the TPMS slope by about a quarter** (+2.49 → +1.90 ms), not to near zero. The
+  first object is paid on every ray, whichever box the ray is in.
+- **The cold compile triples.** Each object's SDF now sits behind a non-uniform branch. This
+  bears on E-21 (P07 T2).
+
+These rows are at T1's commit; P07 T3 re-measures at T2's.
+
 ### How to measure (P01 T4 checklist)
 
 Same set-up as the P00 T5 checklist above, steps 1 and 2: a Release build at the commit to

@@ -28,8 +28,11 @@ the owner's re-measurement (T3) covers rays that meet many boxes.
 
 #### Notes (P07.1, 2026-10-13)
 Built: `lowerScene` culling, box bindings, the depth-stacked family, `scene_render_test`
-steps 4–5 (pass on llvmpipe). The before/after snapshot run of the P01.4 scenes and the full
-gate were cut short when the development box's GL stack wedged (`HANDOFF_P07_TASK1.md`).
+steps 4–5. All three acceptance criteria are met: on the GTX, the snapshots are 0 px off
+(owner, dd92129); the culling-box upload compiles and links nothing; the pick agrees with
+the image. The owner's GTX run shows the primitive slope up, +0.28 → +0.40 ms, and the
+cold compile tripled (`docs/roadmap/02-measurements.md` § With per-object culling).
+Two owner decisions are open (`HANDOFF_P07_TASK1.md` § Open).
 
 ### T2. Asynchronous shader compile (E-21)
 

@@ -2,11 +2,12 @@
 
 Date: 2026-10-13. Plan: `plan/35_P07_render_scaling.md` § T1. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: blocked. The code is written; verification is incomplete.** The llvmpipe results
-below pass. Then the development box's GL stack wedged: the NV92 GPU hung, and after that
-even `LIBGL_ALWAYS_SOFTWARE=1 QT_QPA_PLATFORM=offscreen DualCEditor --snapshot` of one
-sphere hangs at 0 % CPU. The box needs a reboot. Until then the full `scripts/check.py`
-(its GL ctests) cannot run; `check.py --fast` passes.
+**Status: blocked on two owner decisions (§ Open).** The acceptance criteria are met.
+The gate passes on the development box. The owner's GTX run is recorded.
+
+History. The first session returned `blocked`: the development box's GL stack had wedged.
+Giacomo rebooted it and answered on 2026-10-13 (§ The owner's answers). This second session
+ran the gate and recorded the owner's GTX run.
 
 ## What changed and why
 
@@ -40,10 +41,36 @@ sphere hangs at 0 % CPU. The box needs a reboot. Until then the full `scripts/ch
 - pick vs culled image, 7500 sampled px: 7500 agree, 0 disagree (near 356, far 109,
   none 7035).
 
-**Not done: the `--snapshot` before/after of the six P01.4 scenes.** Reference PNGs from
-the pre-change binary (8b9baf8) were made on NV92 and llvmpipe. The after-run was made with
-the clipped first version (see below), then the box wedged before a clean run of the final
-binary. Owner: compare `--snapshot` of the `--objects` scenes at 8b9baf8 and at this commit.
+Gate after the reboot (development box, NV92): `python scripts/check.py`. The first run
+failed one test, `viewport`, a timing-based test, on a box just rebooted. It passed when run
+alone, and the second full run passed 12/12, exit 0. `scene_render` passes in 1.3 s on NV92.
+
+## The owner's answers (Giacomo, 2026-10-13)
+
+1. The box was rebooted. GL works again under llvmpipe and NV92.
+2. The before/after `--snapshot` diff is a GTX human check, not llvmpipe or NV92.
+3. The owner ran it, plus `measure_viewport.py --objects`, at dd92129. The bundle
+   `.plan-run/P07_T1_GTX_2026-10-13.zip` is not tracked; its numbers are now in
+   `docs/roadmap/02-measurements.md` § With per-object culling (P07 T1), and its raw JSON is
+   `docs/roadmap/02-measurements-p07.jsonl`.
+
+## Measured on the GTX 1050 Ti (owner, 2026-10-13, dd92129)
+
+GL 3.3.0 NVIDIA 441.93, Qt 6.8.3, Windows 10, Release.
+- `--snapshot` at 8b9baf8 against dd92129, every `--objects` scene (primitives,
+  stacked in depth, TPMS-in-box): **0 / 480 000 px differ in each**. The acceptance
+  tolerance was 16 px.
+- Settled GPU per added object at 1.0, P01.4 (b011b24) → dd92129: primitives +0.28 →
+  **+0.40 ms**, TPMS-in-box +2.49 → **+1.90 ms**, stacked in depth **+0.18 ms** (new).
+- Cold compile at 0.35: 10 primitives 670 → **2009 ms**, 3 TPMS-in-box 1210 → **3503 ms**.
+- The window with 3 TPMS-in-box: nothing missing, orbiting fine.
+- ctest on the GTX: 11/12. `main_window` fails "the .fld renders a different image"
+  (`tests/main_window_test.cpp:220`). The failure is the same at 8b9baf8, so it predates P07.
+
+Reading: the culling is exact, but it does not pay for cheap primitives. The box test costs
+about as much as a sphere's SDF. The first visible object in scene order is always
+evaluated, so for 3 TPMS-in-box every ray pays object 1 as well as its own. The non-uniform
+branches also triple the cold compile, which raises the stakes of P07 T2.
 
 ## What I got wrong on the way
 
@@ -66,14 +93,16 @@ binary. Owner: compare `--snapshot` of the `--objects` scenes at 8b9baf8 and at 
 
 ## Open — for Giacomo
 
-1. **Reboot the development box**, then run `python scripts/check.py`. If it hangs on
-   `scene_render` with the NV92, run that test once with `LIBGL_ALWAYS_SOFTWARE=1` to tell
-   a driver hang from a bug.
-2. **GTX check (human):** `--snapshot` of the `--objects` scenes (P01.4 families plus
-   stacked-in-depth) at 8b9baf8 and at this commit should match within driver noise. Open
-   the window with 3 TPMS-in-box: nothing missing, and the frame time no worse.
-3. Whether the divergent per-pixel branch the culling adds is what hung NV92 is not known.
-   The GTX run in T3 settles whether it costs more than it saves.
+1. **The GTX `main_window` failure** (pre-existing at 8b9baf8). Either accept P07.1 and open
+   it as its own item, or hold P07.1 until it is found. Found only with a GTX in the loop.
+2. **The culling does not lower the primitive slope; it raises the cold compile.** Either
+   keep it as built and let T3 judge it, or change the scheme in this unit:
+   - two passes, objects whose box holds `p` first, so the first object is no longer paid
+     on every ray; this costs more compile time;
+   - skip the box test for cheap objects (analytic primitives), cull only costly ones;
+   - revert the culling and close E-23 as not worth it.
+3. Unknown: whether NV92 hung on the culled shader or on the parallel GL runs. The gate
+   passes on NV92 since the reboot.
 
 ## For the next unit
 
