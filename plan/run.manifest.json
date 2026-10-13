@@ -8,38 +8,40 @@
 		"model": "opus",
 		"effort": "high",
 		"permissionMode": "bypassPermissions",
-		"maxBudgetUsd": 3,
-		"maxUnitsPerRun": 3,
-		"maxRunListUsd": 10,
+		"maxBudgetUsd": 4,
+		"maxUnitsPerRun": 9,
+		"maxRunListUsd": 40,
 		"requireSubscriptionAuth": true,
 		"timeoutMinutes": 180,
 		"addDirs": [],
 		"ciCommand": "python scripts/check.py",
 		"env": {},
-		"checks": [],
+		"checks": [
+			{
+				"name": "gtx-queue",
+				"command": "sh -c 'mkdir -p .plan-run && printf \"%s  %s\\n\" \"$(date -I)\" \"$(git log -1 --format=%s)\" >> .plan-run/gtx-queue.txt'",
+				"hint": "queues the unit's GTX 1050 Ti check for the owner's next batched laptop session; the handoff's human-check section is the checklist"
+			}
+		],
 		"diffRules": [],
 		"exitCriteriaRules": [],
-		"humanCheck": null,
+		"humanCheck": "gtx-queue",
 		"devServer": null,
 		"unitFlags": [],
 		"prechecks": {
 			"noRemote": false,
 			"externalBranches": []
 		},
-		"promptNotes": [],
+		"promptNotes": [
+			{
+				"text": "GTX 1050 Ti checks are batched, not run per unit. When your work needs the reference GPU (E-04), write a section `## GTX check owed` in the handoff with the exact steps and the expected numbers, set `needsHumanCheck: true`, and continue; do not return `blocked` for it. A decision already marked Decided in docs/decisions/02-open.md (E-07, E-08, E-09, E-10) is settled; do not ask it again."
+			}
+		],
 		"gitPolicy": {
 			"noPush": true
 		},
-		"stopUnits": [
-			"P03",
-			"P04",
-			"P05"
-		],
-		"stopUnitsWhy": {
-			"P03": "waits on E-08 (scene file format), docs/decisions/02-open.md",
-			"P04": "waits on E-09 (mesh import formats), docs/decisions/02-open.md",
-			"P05": "waits on E-10 (smooth booleans on non-metric inputs), docs/decisions/02-open.md"
-		},
+		"stopUnits": [],
+		"stopUnitsWhy": {},
 		"stopKeywords": [
 			"deferred",
 			"conditional",

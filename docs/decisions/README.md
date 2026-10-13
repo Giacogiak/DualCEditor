@@ -16,6 +16,6 @@ This table is authoritative; `/plan-run` reads it before unlocking a phase.
 | Decision | Blocks | Status |
 |---|---|---|
 | E-07 Picking mechanism | P01 | decided: CPU pick (2026-10-12) |
-| E-08 Scene file format | P03 | open |
-| E-09 Mesh import formats and readers | P04 | open |
-| E-10 Smooth booleans on non-metric inputs | P05 | open |
+| E-08 Scene file format | P03 | decided: zip container (2026-10-13) |
+| E-09 Mesh import formats and readers | P04 | decided: OBJ, PLY, STL; 3MF deferred (2026-10-13) |
+| E-10 Smooth booleans on non-metric inputs | P05 | decided: wrap in `normalize` automatically (2026-10-13) |

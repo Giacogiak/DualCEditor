@@ -33,6 +33,10 @@ saved scene must carry its meshes itself.
 
 Whichever is chosen, the reader must check `version` (DualC's graph reader ignores it).
 
+**Decided (Giacomo, 2026-10-13):** zip container, the recommended option. The owner asked
+the run to continue without stopping and delegated the open decisions to the plan's
+recommendations.
+
 ## E-09 — Mesh import formats and readers
 
 geometry-central (already linked through DualC) reads OBJ and PLY. STL and 3MF are what
@@ -43,6 +47,9 @@ CAD and print users drag in.
 - **All four now.** 3MF via miniz plus a small XML parse of the mesh part.
 - **OBJ and PLY only**, through geometry-central. Users convert STL elsewhere.
 
+**Decided (Giacomo, 2026-10-13):** OBJ, PLY and STL first, the recommended option; 3MF is
+deferred. Delegated to the plan's recommendation, as E-08.
+
 ## E-10 — Smooth booleans on non-metric inputs
 
 `winding` (for mesh soups) and raw TPMS fields are not distance fields, and DualC's smooth
@@ -52,3 +59,6 @@ booleans misbehave on them unless wrapped in `normalize`.
   operand of a smooth boolean, and shows it in the object's history.
 - **Warn and let the user choose.**
 - **Forbid**: smooth booleans are disabled on non-metric operands.
+
+**Decided (Giacomo, 2026-10-13):** wrap automatically, the recommended option. Delegated to
+the plan's recommendation, as E-08.
