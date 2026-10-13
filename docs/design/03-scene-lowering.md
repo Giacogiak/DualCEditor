@@ -92,8 +92,9 @@ An object that fails to build or compile throws `GraphError` with
 
 ## Culling
 
-P07 T1, closes E-23. `lowerScene(scene)` (`cull` true, the default) writes each term of
-`sceneSDF` and `sceneColor` behind a test on the object's world box:
+P07 T1, closes E-23. `lowerScene(scene)` (`cull` true, the default) writes the terms of a
+**costly** object (§ The cost rule) in `sceneSDF` and `sceneColor` behind a test on the
+object's world box:
 
 ```glsl
 float sceneBoxDist(vec3 p, vec3 lo, vec3 hi) { return length(max(max(lo - p, p - hi), 0.0)); }
@@ -122,7 +123,8 @@ and the same test before `float di = o<id>_sdf(p)` in `sceneColor`.
   clip was dropped. An object whose surface leaves its own box is not supported either way;
   the pick clips each object to its own box (§ Picking), the culling only skips it.
 - **Order.** Objects are tested in scene order. The first visible object is always
-  evaluated (`d` is 1e10). A near object listed first culls the most.
+  evaluated (`d` is 1e10). A near object listed first culls the most. A cheap object,
+  always evaluated, lowers `d` for the costly ones after it.
 - **The box is a binding**, `nodePointer` `/objects/<id>`, as the visible flag is. A move
   uploads `worldBox(localBounds, worldFromLocal)` (`src/scene.h`) and compiles nothing
   (`scene_render_test`). The window does this on a `matrix` edit in the Parameters dock
@@ -134,8 +136,32 @@ and the same test before `float di = o<id>_sdf(p)` in `sceneColor`.
 - **The scene trace box** (`bounds`) is unchanged: still the union, hidden objects included.
 
 `lowerScene(scene, false)` writes P01's plain union, byte for byte. It exists so the
-tests can compare the culled image with the plain one. The box bindings are emitted in both
-modes, so binding indices do not depend on it; unused, they upload to location −1.
+tests can compare the culled image with the plain one. The box bindings are emitted in every
+case, so binding indices depend neither on `cull` nor on the cost rule. A box uniform is
+declared only for a culled object; an undeclared one uploads to location −1.
+
+### The cost rule
+
+`isCostlyObject(graph)` (`src/scene.h`). The rule was the owner's choice on 2026-10-13
+(option C), after the GTX run of the first version, which culled every object
+(`../roadmap/02-measurements.md` § With per-object culling (P07 T1)). That version raised
+the primitive slope from +0.28 to +0.40 ms per object and tripled the cold compile; the box
+test costs about what a sphere's SDF does.
+
+An object is **cheap**, and written as in P01 with no box test, when its graph has at most
+`kCheapObjectNodes` (8) nodes, every one of them in:
+
+| Kind | Ops |
+|---|---|
+| Analytic primitives | `sphere`, `box`, `roundbox`, `ellipsoid`, `torus`, `capsule`, `cappedcylinder` |
+| Sharp booleans | `union`, `intersection`, `difference` |
+| Placement | `translate`, `rotate`, `transform`, `scale`, `mirror` |
+
+Any other op makes it **costly**: a TPMS (`gyroid`, `schwarz-p`, `fischer-koch`, …), a lattice
+(`octet`, …), `mesh`, smooth booleans, `onion`, `offset`, `round`, `normalize`, warps
+(`twist`, `bend`, `displace`), `repeat`. So does a larger graph of cheap ops. A scene with
+no costly object writes P01's shader byte for byte (`scene_test`), without the
+`sceneBoxDist` helper.
 
 ## Why each object compiles on its own
 

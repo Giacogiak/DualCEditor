@@ -5,6 +5,16 @@
 **Now: P07, render scaling (`../../plan/35_P07_render_scaling.md`).** Per-object
 bounding-box culling (E-23), asynchronous shader compile (E-21), then a GTX re-measurement.
 Added by P02 and run before P03, since neither waits on E-08.
+T1 is done: costly objects (TPMS, lattices, meshes, …) skip their SDF while `p` is farther
+from their world box than the nearest object, and cheap analytic objects are written as in
+P01 (`../design/03-scene-lowering.md` § Culling). The owner's GTX run of a first version,
+which culled every object, is in `02-measurements.md` § With per-object culling (P07 T1).
+
+**Known failure, its own item (owner, 2026-10-13):** on the GTX 1050 Ti, `main_window`
+fails one check, "the .fld renders a different image" (`tests/main_window_test.cpp:220`),
+at 8b9baf8 and at P07.1, so before P07. It passes on the development box. To be
+investigated with the GTX in the loop. Until then the GTX ctest is 11/12. It does not
+block P07.
 
 Done: P02, go or no-go (`../../plan/30_P02_go_no_go.md`). `03-go-no-go.md` says **go**,
 approved by the owner on 2026-10-13. Every analytic and one-mesh scene measured orbits at

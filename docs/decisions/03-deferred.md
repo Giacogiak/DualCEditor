@@ -35,8 +35,9 @@ P04 T2 (approved 2026-10-13, now in P04 T2's acceptance).
 TPMS-in-box, settled GPU at 1280×800 on the GTX 1050 Ti (`../roadmap/02-measurements.md`).
 **Trigger:** frame time grows with the number of non-overlapping objects (P01's measurement).
 **Planned (P02.1, approved 2026-10-13):** P07 T1 (`../../plan/35_P07_render_scaling.md`).
-**Built (P07.1, 2026-10-13):** each object's terms in `sceneSDF` and `sceneColor` are
-skipped while `p` is farther from its world box (`u_o<id>_boxMin`/`boxMax`, uniforms) than
+**Built (P07.1, 2026-10-13):** each costly object's terms in `sceneSDF` and `sceneColor`
+(TPMS, lattice, mesh, … — not analytic primitives; owner's option C) are skipped while
+`p` is farther from its world box (`u_o<id>_boxMin`/`boxMax`, uniforms) than
 the nearest object so far (`../design/03-scene-lowering.md` § Culling). Closes when P07 T3
 measures the slope on the GTX.
 

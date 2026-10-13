@@ -32,7 +32,9 @@ steps 4–5. All three acceptance criteria are met: on the GTX, the snapshots ar
 (owner, dd92129); the culling-box upload compiles and links nothing; the pick agrees with
 the image. The owner's GTX run shows the primitive slope up, +0.28 → +0.40 ms, and the
 cold compile tripled (`docs/roadmap/02-measurements.md` § With per-object culling).
-Two owner decisions are open (`HANDOFF_P07_TASK1.md` § Open).
+On the owner's answer (option C), only costly objects are culled (TPMS, lattices, meshes,
+…; `docs/design/03-scene-lowering.md` § The cost rule); a scene of primitives is P01's
+shader again. The `main_window` failure on the GTX predates P07 and is tracked on its own.
 
 ### T2. Asynchronous shader compile (E-21)
 

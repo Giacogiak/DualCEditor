@@ -5,7 +5,9 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <utility>
@@ -133,6 +135,21 @@ std::string objectUniformName(int id, const char* key) {
   return "u_o" + std::to_string(id) + "_" + key;
 }
 
+bool isCostlyObject(const fg::GraphNode& graph) {
+  // Analytic primitives, sharp booleans and rigid placement: each costs about
+  // what the box test would, so testing the box first does not pay.
+  static const std::set<std::string> kCheap = {
+      "sphere",   "box",          "roundbox",  "ellipsoid", "torus",
+      "capsule",  "cappedcylinder", "union",   "intersection", "difference",
+      "translate", "rotate",      "transform", "scale",     "mirror"};
+  std::map<std::string, std::string> ops;
+  collectNodeOps(graph, ops);
+  if (int(ops.size()) > kCheapObjectNodes) return true;
+  for (const auto& [pointer, op] : ops)
+    if (!kCheap.count(op)) return true;
+  return false;
+}
+
 LoweredScene lowerScene(const Scene& scene, bool cull) {
   if (scene.isEmpty()) throw fg::GraphError("the scene has no objects", "");
   LoweredScene out;
@@ -140,8 +157,11 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
   s.stepScale = 1.0f;
   s.featureScale = 0.0f;
   std::ostringstream src, sdf, colour;
-  // The distance from p to an object's world box, 0 inside it.
-  if (cull)
+  // The distance from p to an object's world box, 0 inside it. Written only
+  // when an object is culled: a scene of cheap objects is P01's shader.
+  bool anyCulled = false;
+  for (const SceneObject& o : scene.objects()) anyCulled = anyCulled || isCostlyObject(o.graph);
+  if (cull && anyCulled)
     sdf << "float sceneBoxDist(vec3 p, vec3 lo, vec3 hi) {\n"
            "  return length(max(max(lo - p, p - hi), 0.0));\n}\n";
   sdf << "float sceneSDF(vec3 p) {\n  float d = 1e10;\n";
@@ -180,12 +200,13 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
     const std::string boxMax = objectUniformName(o.id, "boxMax");
     src << "// object " << o.id << "\n" << rename(part.generatedSource);
     src << "uniform float " << visible << ";\nuniform vec3 " << col << ";\n";
-    if (cull) src << "uniform vec3 " << boxMin << ", " << boxMax << ";\n";
+    lo.culled = cull && isCostlyObject(o.graph);
+    if (lo.culled) src << "uniform vec3 " << boxMin << ", " << boxMax << ";\n";
     src << "\n";
     const std::string objectSdf = "o" + std::to_string(o.id) + "_sdf(p)";
     const std::string hit = "if (di < d) { d = di; c = " + col + "; id = " +
                             std::to_string(o.id) + ".0; }";
-    if (cull) {
+    if (lo.culled) {
       // Skipped while p is farther from the object's box than d, the nearest
       // so far: the box distance is a lower bound of the object's field
       // there, so the min is unchanged.

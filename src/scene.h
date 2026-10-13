@@ -74,6 +74,9 @@ struct LoweredObject {
   // The culling box (vec3 each): worldBounds as lowered. A move uploads
   // worldBox(localBounds, worldFromLocal) here, with no compile.
   int boxMinBinding = -1, boxMaxBinding = -1;
+  // Whether sceneSDF and sceneColor test the box before the object
+  // (isCostlyObject). The box bindings exist either way.
+  bool culled = false;
   dualc::BBox localBounds;  // the graph's padded trace box, before transform
   dualc::BBox worldBounds;  // localBounds transformed, as an axis-aligned box
   // DualC's march constants of the object compiled alone (GlslScene's).
@@ -92,12 +95,22 @@ struct LoweredScene {
 // The axis-aligned box around `local` moved by `worldFromLocal`.
 dualc::BBox worldBox(const dualc::BBox& local, const dualc::Mat4& worldFromLocal);
 
+// The cost rule of the culling (P07 T1, docs/design/03-scene-lowering.md
+// § Culling): an object is costly, and culled, unless its graph has at most
+// kCheapObjectNodes nodes, all analytic primitives (sphere, box, roundbox,
+// ellipsoid, torus, capsule, cappedcylinder), sharp booleans (union,
+// intersection, difference) or placement (translate, rotate, transform,
+// scale, mirror). A TPMS, a mesh, a lattice, a smooth boolean, onion, offset
+// or a warp makes it costly.
+inline constexpr int kCheapObjectNodes = 8;
+bool isCostlyObject(const dce::fieldgraph::GraphNode& graph);
+
 // Lower `scene` to one GlslScene. Each object's graph is wrapped in DualC's
 // `transform` node and compiled on its own by compileToGlsl (meshes bake in
 // the object's local box), then its identifiers get the object id, so no two
 // objects share a function or a uniform. With `cull`, sceneSDF and sceneColor
-// skip an object while p is farther from its world box than the nearest
-// object so far (docs/design/03-scene-lowering.md § Culling); without, they
+// skip a costly object (isCostlyObject) while p is farther from its world box
+// than the nearest object so far (docs/design/03-scene-lowering.md § Culling); without, they
 // are the plain min of P01 (the reference the culling is tested against).
 // Throws dce::fieldgraph::GraphError naming the object on the first object
 // that does not compile, or when the scene is empty.

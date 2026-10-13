@@ -164,7 +164,7 @@ object's name, then under their node, shown as its op and its pointer with the o
 front (`onion /objects/1/root/in/0/in/1`). Each object ends with its own `object
 /objects/<id>` group: `matrix` (the object's local-from-world transform), `visible` (1 or 0)
 and `colour` (linear RGB), then `boxMin` and `boxMax`, the object's world box that the
-culling reads (greyed out: an edit of `matrix` moves them, nothing else edits them;
+culling reads when the object is costly (greyed out: an edit of `matrix` moves them, nothing else edits them;
 `../design/03-scene-lowering.md` § Culling). Each row is the parameter's name
 (`thickness`, `wavelength`, `center`, `mat`). Its tooltip gives the uniform's type and name.
 

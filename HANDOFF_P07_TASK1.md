@@ -2,12 +2,13 @@
 
 Date: 2026-10-13. Plan: `plan/35_P07_render_scaling.md` § T1. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: blocked on two owner decisions (§ Open).** The acceptance criteria are met.
-The gate passes on the development box. The owner's GTX run is recorded.
+**Status: done** on the automatic checks. The acceptance criteria are met and the gate passes. A GTX re-run of the
+cost-rule version is asked for (§ Human check asked).
 
 History. The first session returned `blocked`: the development box's GL stack had wedged.
 Giacomo rebooted it and answered on 2026-10-13 (§ The owner's answers). This second session
-ran the gate and recorded the owner's GTX run.
+ran the gate and recorded the owner's GTX run, then returned two decisions. Giacomo answered
+them (§ The owner's second answers), and a third session built the cost rule.
 
 ## What changed and why
 
@@ -91,18 +92,61 @@ branches also triple the cold compile, which raises the stakes of P07 T2.
   TPMS-in-box. The development box cannot judge many-object images; llvmpipe can.
 - llvmpipe snapshots of 1 and 3 objects took about a second each before the change.
 
-## Open — for Giacomo
+## The owner's second answers (Giacomo, 2026-10-13)
 
-1. **The GTX `main_window` failure** (pre-existing at 8b9baf8). Either accept P07.1 and open
-   it as its own item, or hold P07.1 until it is found. Found only with a GTX in the loop.
-2. **The culling does not lower the primitive slope; it raises the cold compile.** Either
-   keep it as built and let T3 judge it, or change the scheme in this unit:
-   - two passes, objects whose box holds `p` first, so the first object is no longer paid
-     on every ray; this costs more compile time;
-   - skip the box test for cheap objects (analytic primitives), cull only costly ones;
-   - revert the culling and close E-23 as not worth it.
-3. Unknown: whether NV92 hung on the culled shader or on the parallel GL runs. The gate
-   passes on NV92 since the reboot.
+1. **P07.1 is accepted with the GTX `main_window` failure open.** That failure is its own item,
+   to be investigated with the GTX in the loop; the GTX ctest stays red until then. P07.2 is
+   not blocked by it. Recorded in `docs/roadmap/README.md` § Current focus. It predates P07,
+   since 8b9baf8 fails `tests/main_window_test.cpp:220`, "the .fld renders a different image",
+   on the GTX only.
+2. **Culling option C: cull only costly objects.** Built in the third session:
+   - `isCostlyObject(graph)` (`src/scene.{h,cpp}`) and `LoweredObject::culled`.
+   - **Cheap, never culled:** a graph of at most 8 nodes (`kCheapObjectNodes`), all of them
+     analytic primitives (`sphere`, `box`, `roundbox`, `ellipsoid`, `torus`, `capsule`,
+     `cappedcylinder`), sharp booleans (`union`, `intersection`, `difference`) or
+     placement (`translate`, `rotate`, `transform`, `scale`, `mirror`).
+   - **Costly, culled:** anything else, such as a TPMS, a lattice, `mesh`, smooth booleans,
+     `onion`, `offset`, `round`, `normalize`, warps, `repeat`, or more than 8 nodes.
+     `docs/design/03-scene-lowering.md` § The cost rule.
+   - A cheap object is written exactly as in P01, with no box uniform declared. A scene with
+     no costly object omits `sceneBoxDist` too, so its shader is P01's byte for byte
+     (`scene_test`). So the primitive families should return to P01.4's slope and compile
+     times (the driver cache aside). The box bindings stay on every object, so
+     indices, P03's move and the dock do not depend on the rule.
+   - Tests. `scene_test` covers the rule, the source and the byte-for-byte cheap scene.
+     `scene_render_test` step 4 now uses three thin shells (`onion(sphere)`, costly) for the
+     box-upload and culled-vs-plain checks, and checks that spheres are not culled. Step 5
+     stacks two shells for the pick-vs-image check, because spheres are no longer culled.
+
+Measured after option C, development box, 400×300 (`scene_render_test`):
+- llvmpipe: culled vs plain union 0 px for three spheres, three shells and gyroid_box;
+  pick vs image 7500/7500 agree.
+- NV92: culled vs plain union 0 px for the same three scenes; pick vs image 7486 agree,
+  14 disagree (0.19 %, silhouette pixels; the bound is 0.5 %).
+- On both, 4 links and 8 compiles before and after the box uploads.
+- `python scripts/check.py`: 12/12, exit 0.
+
+## Human check asked
+
+On the GTX, at this unit's last commit:
+`python scripts/measure_viewport.py --objects` and the `--snapshot` diff against 8b9baf8,
+as in the owner's bundle. Expected:
+- 0 px in every scene;
+- the primitive slope back near +0.28 ms, and the primitive compile back near P01.4's
+  (670 ms for 10, cold);
+- TPMS-in-box near the dd92129 run (+1.90 ms per box).
+
+The stacked-in-depth family is all primitives, so it is no longer culled. Its +0.18 ms
+(dd92129) is now a cheap-object baseline. If a culled depth family is wanted, it needs
+costly objects; T3 or the owner decides.
+
+## Open
+
+- The GTX `main_window` failure (above), its own item.
+- NV92: it is still unknown whether the culled shader or the parallel GL runs hung it on
+  the first session. Since the reboot, NV92 passes the gate with the culled shells.
+- With costly objects, the first one in scene order is still always evaluated (§ Culling,
+  Order). A two-pass scheme was offered as option B and not chosen.
 
 ## For the next unit
 

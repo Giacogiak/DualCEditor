@@ -118,6 +118,28 @@ int main() {
   check(assembleSceneShader(plain) == fg::assembleTraceShader(plain, false),
         "a plain graph's shader is DualC's, unpatched");
 
+  // The cost rule of the culling: analytic primitives are cheap, a TPMS is
+  // costly; only costly objects get the box test.
+  check(!low.objects[0].culled && low.objects[2].culled, "a sphere is cheap, a gyroid costly");
+  check(src.find("sceneBoxDist(p, u_o4_boxMin, u_o4_boxMax)") != std::string::npos &&
+            src.find("sceneBoxDist(p, u_o1_boxMin") == std::string::npos,
+        "only the costly object tests its box");
+  check(!isCostlyObject(parseGraphText(
+            "union(sphere(radius=1),translate(by=[1,0,0],box(min=[0,0,0],max=[1,1,1])))", false)),
+        "a small union of placed primitives is cheap");
+  check(isCostlyObject(parseGraphText("onion(sphere(radius=1),thickness=0.1)", false)),
+        "onion is costly");
+  check(lowerScene(scene, false).scene.generatedSource.find("sceneBoxDist") == std::string::npos,
+        "without culling no object tests its box");
+  {
+    Scene cheap;
+    cheap.add("a", sphere);
+    cheap.add("b", sphere).transform = dualc::Mat4::translation({2.0, 0.0, 0.0});
+    check(lowerScene(cheap).scene.generatedSource ==
+              lowerScene(cheap, false).scene.generatedSource,
+          "a scene of cheap objects is P01's shader, byte for byte");
+  }
+
   // An empty scene does not lower.
   threw = false;
   try {

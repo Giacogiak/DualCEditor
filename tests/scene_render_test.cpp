@@ -4,7 +4,8 @@
 //  2. three objects side by side render each in its own colour;
 //  3. hiding an object removes it and showing it again restores the image,
 //     with no shader compile and no program link;
-//  4. the per-object culling (P07 T1) leaves the images of 1 and 2 as the
+//  4. the per-object culling (P07 T1) skips cheap objects (spheres), culls
+//     costly ones (shells), leaves the images of 1, 2 and three shells as the
 //     plain union draws them, and a culling-box upload neither compiles nor
 //     links;
 //  5. the CPU pick and the culled image agree, pixel by pixel, on which object
@@ -171,23 +172,42 @@ int run(const QString& graphPath) {
         "visibility and colour edits neither compile nor link");
   r.setParameter(c = low.scene.bindings[std::size_t(low.objects[0].colourBinding)]);
 
-  // 4. A culling-box upload is a uniform edit. The last object's box moved
-  // off it culls it wherever the others are nearer than the box: the image
+  // 4. Spheres are cheap: no box test (isCostlyObject). Thin shells of the
+  // same spheres (onion) are costly and culled.
+  check(!low.objects[0].culled && !low.objects[2].culled, "a sphere is not culled");
+  Scene shells;
+  const fg::GraphNode shell = parseGraphText("onion(sphere(radius=0.7),thickness=0.05)", false);
+  for (int i = 0; i < 3; ++i) {
+    SceneObject& o = shells.add(QString("shell %1").arg(i + 1), shell);
+    o.transform = dualc::Mat4::translation({2.0 * (i - 1), 0.0, 0.0});
+    o.colour = colours[i];
+  }
+  const LoweredScene shellsLow = lowerScene(shells);
+  check(shellsLow.objects[0].culled && shellsLow.objects[2].culled, "a shell is culled");
+  if (!r.setScene(shellsLow.scene, &error))
+    return std::fprintf(stderr, "%s\n", error.c_str()), 1;
+  const int shellLinks = r.linkCount(), shellCompiles = r.compileCount();
+  const QImage shellsAll = draw(r, cam);
+
+  // A culling-box upload is a uniform edit. The last object's box moved off
+  // it culls it wherever the others are nearer than the box: the image
   // changes. (The first object is never culled: nothing is nearer yet.)
-  fg::UniformBinding boxMin = low.scene.bindings[std::size_t(low.objects[2].boxMinBinding)];
-  fg::UniformBinding boxMax = low.scene.bindings[std::size_t(low.objects[2].boxMaxBinding)];
+  fg::UniformBinding boxMin =
+      shellsLow.scene.bindings[std::size_t(shellsLow.objects[2].boxMinBinding)];
+  fg::UniformBinding boxMax =
+      shellsLow.scene.bindings[std::size_t(shellsLow.objects[2].boxMaxBinding)];
   const fg::UniformBinding boxMin0 = boxMin, boxMax0 = boxMax;
   boxMin.value[1] += 10.0f;
   boxMax.value[1] += 10.0f;
   r.setParameter(boxMin);
   r.setParameter(boxMax);
-  check(differing(draw(r, cam), all) > 200, "the culling reads the box uniforms");
+  check(differing(draw(r, cam), shellsAll) > 200, "the culling reads the box uniforms");
   r.setParameter(boxMin0);
   r.setParameter(boxMax0);
-  check(differing(draw(r, cam), all) == 0, "the box put back restores the image");
+  check(differing(draw(r, cam), shellsAll) == 0, "the box put back restores the image");
   std::printf("scene_render_test: %d links, %d compiles after the box uploads\n",
               r.linkCount(), r.compileCount());
-  check(r.linkCount() == links && r.compileCount() == compiles,
+  check(r.linkCount() == shellLinks && r.compileCount() == shellCompiles,
         "a culling-box upload neither compiles nor links");
 
   // The culled images against the plain union's (lowerScene(scene, false), the
@@ -204,16 +224,18 @@ int run(const QString& graphPath) {
     check(n <= kW * kH / 1000 && most <= 1, what);
   };
   unculled(three, all, "three spheres, culled as unculled");
+  unculled(shells, shellsAll, "three shells, culled as unculled");
   frameBounds(cam, plain.scene->bounds);
   unculled(one, asScene, "the one-object scene, culled as unculled");
 
-  // 5. Two spheres one behind the other along the view axis: wherever the
+  // 5. Two shells one behind the other along the view axis: wherever the
   // near one covers the far one, the culling skips the far one. Each pixel's
   // pick names the object whose colour the image shows there.
   Scene stack;
   const SceneColour red = {0.9f, 0.1f, 0.1f}, blue = {0.1f, 0.1f, 0.9f};
-  stack.add("near", sphere).colour = red;
-  SceneObject& far = stack.add("far", parseGraphText("sphere(radius=1.2)", false));
+  stack.add("near", shell).colour = red;
+  SceneObject& far =
+      stack.add("far", parseGraphText("onion(sphere(radius=1.2),thickness=0.05)", false));
   far.colour = blue;
   far.transform = dualc::Mat4::translation({0.4, 0.3, -4.0});
   const LoweredScene stackLow = lowerScene(stack);

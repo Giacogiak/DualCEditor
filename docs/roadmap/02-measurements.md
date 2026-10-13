@@ -256,7 +256,9 @@ Findings (P07 T1):
 - **The cold compile triples.** Each object's SDF now sits behind a non-uniform branch. This
   bears on E-21 (P07 T2).
 
-These rows are at T1's commit; P07 T3 re-measures at T2's.
+These rows are at T1's first commit. On the owner's decision (2026-10-13, option C), the
+culling now applies to costly objects only (`../design/03-scene-lowering.md` § The cost
+rule). A scene of primitives is P01's shader again. P07 T3 re-measures at T2's commit.
 
 ### How to measure (P01 T4 checklist)
 
