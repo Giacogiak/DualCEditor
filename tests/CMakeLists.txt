@@ -107,3 +107,15 @@ add_executable(pick_test pick_test.cpp)
 target_link_libraries(pick_test PRIVATE dualceditor_core)
 dualceditor_target_options(pick_test)
 add_test(NAME pick COMMAND pick_test)
+
+# The asynchronous compile (P07 T2, E-21): a build swaps the program while
+# frames are drawn with no frame mixing the two scenes, the last of two builds
+# wins, a failure keeps the image, and in the window an add during a compile
+# gives the last edit's scene.
+add_executable(async_compile_test async_compile_test.cpp)
+target_link_libraries(async_compile_test PRIVATE dualceditor_core)
+dualceditor_target_options(async_compile_test)
+add_test(NAME async_compile
+  COMMAND async_compile_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+set_tests_properties(async_compile PROPERTIES SKIP_RETURN_CODE 77)

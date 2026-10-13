@@ -55,6 +55,13 @@ GTX (`docs/roadmap/02-measurements.md`). Record the threading in
 - The status bar still shows the compile ms; `--bench` still reports `compileMs`.
 - The command-reference page says what the window shows while a scene compiles.
 
+#### Notes (P07.2, 2026-10-13)
+Built: `Viewport::buildScene` and its compile thread, `TraceRenderer::linkProgram` and
+`adoptProgram`, the window's lowering moved into the build, and `async_compile_test`. All
+four acceptance criteria are met on llvmpipe and NV92. `Viewport::setScene` stays
+synchronous, so `--bench`'s `compileMs` means what it did. The window's responsiveness on
+the GTX is T3's human check (`HANDOFF_P07_TASK2.md`).
+
 ### T3. Measure culling and compile on the GTX 1050 Ti — human check
 
 The owner runs `scripts/measure_viewport.py --objects` on the laptop, as in P01 T4, at

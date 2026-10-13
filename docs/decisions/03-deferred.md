@@ -19,6 +19,10 @@ first clause) is the owner's call. `../roadmap/03-go-no-go.md` plans it: asynchr
 compile first, an editor program cache only if measured to help.
 **Confirmed (Giacomo, 2026-10-13):** trigger now. Planned as P07 T2
 (`../../plan/35_P07_render_scaling.md`).
+**Built (P07.2, 2026-10-13):** structural edits lower, compile and link on a compile
+thread with a context shared with the viewport's. The viewport draws the old program until
+the new one links, and the last edit wins (`../design/01-render-path.md` § Asynchronous
+compile). No editor program cache. The owner's responsiveness check is P07 T3.
 
 ## E-22 — Freeze an object to a baked grid
 Bake a finished non-lattice object to a 3D texture so its per-step cost is constant.

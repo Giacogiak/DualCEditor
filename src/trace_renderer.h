@@ -26,6 +26,25 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // gets its per-object colour), upload its mesh grids and set its
   // bindings. On failure the previous scene stays and `*error` holds the log.
   bool setScene(const dce::fieldgraph::GlslScene& scene, std::string* error);
+  // The two halves of setScene, for a compile on another context of the same
+  // share group (Viewport::buildScene, docs/design/01-render-path.md
+  // § Asynchronous compile). linkProgram compiles and links `scene`'s program
+  // on whatever context is current through `gl`, adding its attempts to
+  // `*compiles` and `*links` and its time to `*ms`; 0 on failure, with the log
+  // in `*error`. adoptProgram takes a linked program as the scene on screen:
+  // the previous program and grids go, the grids and every binding go up.
+  static GLuint linkProgram(QOpenGLFunctions_3_3_Core& gl,
+                            const dce::fieldgraph::GlslScene& scene, std::string* error,
+                            int* compiles, int* links, double* ms);
+  void adoptProgram(GLuint program, const dce::fieldgraph::GlslScene& scene,
+                    double compileMs);
+  // Count compiles and links made on another context (linkProgram).
+  void countElsewhere(int compiles, int links) {
+    compileCount_ += compiles;
+    linkCount_ += links;
+  }
+  // Delete a program linked elsewhere and never adopted.
+  void dropProgram(GLuint program) { glDeleteProgram(program); }
   bool hasScene() const { return program_ != 0; }
   // Drop the trace program and its mesh grids: render draws the background.
   void clearScene();

@@ -48,6 +48,16 @@ bool TraceRenderer::initialize() {
 }
 
 bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
+  double ms = 0.0;
+  const GLuint p = linkProgram(*this, scene, error, &compileCount_, &linkCount_, &ms);
+  if (!p) return false;
+  adoptProgram(p, scene, ms);
+  return true;
+}
+
+GLuint TraceRenderer::linkProgram(QOpenGLFunctions_3_3_Core& gl, const fg::GlslScene& scene,
+                                  std::string* error, int* compiles, int* links,
+                                  double* ms) {
   // Compile and link, timed together. Reading the link status waits for the
   // driver to finish the link.
   std::string fragment;
@@ -55,38 +65,42 @@ bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
     fragment = assembleSceneShader(scene);
   } catch (const std::runtime_error& e) {
     *error = e.what();
-    return false;
+    return 0;
   }
   QElapsedTimer clock;
   clock.start();
-  ++compileCount_;
-  const GLuint vs = compileStage(*this, GL_VERTEX_SHADER,
-                                 fg::vertexShaderSource(false), "vertex", error);
-  if (!vs) return false;
-  ++compileCount_;
-  const GLuint fs = compileStage(*this, GL_FRAGMENT_SHADER, fragment, "fragment", error);
+  ++*compiles;
+  const GLuint vs = compileStage(gl, GL_VERTEX_SHADER, fg::vertexShaderSource(false),
+                                 "vertex", error);
+  if (!vs) return 0;
+  ++*compiles;
+  const GLuint fs = compileStage(gl, GL_FRAGMENT_SHADER, fragment, "fragment", error);
   if (!fs) {
-    glDeleteShader(vs);
-    return false;
+    gl.glDeleteShader(vs);
+    return 0;
   }
-  const GLuint p = glCreateProgram();
-  glAttachShader(p, vs);
-  glAttachShader(p, fs);
-  glLinkProgram(p);
-  ++linkCount_;
-  glDeleteShader(vs);
-  glDeleteShader(fs);
+  const GLuint p = gl.glCreateProgram();
+  gl.glAttachShader(p, vs);
+  gl.glAttachShader(p, fs);
+  gl.glLinkProgram(p);
+  ++*links;
+  gl.glDeleteShader(vs);
+  gl.glDeleteShader(fs);
   GLint ok = 0;
-  glGetProgramiv(p, GL_LINK_STATUS, &ok);
+  gl.glGetProgramiv(p, GL_LINK_STATUS, &ok);
   if (!ok) {
     char log[8192] = {};
-    glGetProgramInfoLog(p, sizeof(log), nullptr, log);
+    gl.glGetProgramInfoLog(p, sizeof(log), nullptr, log);
     *error = std::string("program link error:\n") + log;
-    glDeleteProgram(p);
-    return false;
+    gl.glDeleteProgram(p);
+    return 0;
   }
-  compileMs_ = clock.nsecsElapsed() * 1e-6;
+  *ms = clock.nsecsElapsed() * 1e-6;
+  return p;
+}
 
+void TraceRenderer::adoptProgram(GLuint p, const fg::GlslScene& scene, double compileMs) {
+  compileMs_ = compileMs;
   if (program_) glDeleteProgram(program_);
   program_ = p;
   bounds_ = scene.bounds;
@@ -99,7 +113,6 @@ bool TraceRenderer::setScene(const fg::GlslScene& scene, std::string* error) {
   for (std::size_t i = 0; i < scene.meshes.size(); ++i)
     textures_.push_back(uploadGrid3D(scene.meshes[i], static_cast<int>(i)));
   for (const fg::UniformBinding& b : scene.bindings) setBinding(b);
-  return true;
 }
 
 void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {

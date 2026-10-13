@@ -23,6 +23,7 @@
 #include <QStatusBar>
 #include <QUrl>
 
+#include <algorithm>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -123,11 +124,22 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     commit(std::move(p));
   });
   connect(viewport_, &Viewport::sceneFailed, this, [this](const QString& error) {
-    if (!pending_) return;
+    if (!pending_) return showTiming();
     const Pending p = std::move(*pending_);
     pending_.reset();
-    if (p.attempt) reportError(p.loaded, "shader error: " + error.trimmed());
+    showTiming();
+    for (const auto& w : p.waits)
+      if (std::find(waiting_.begin(), waiting_.end(), w) == waiting_.end())
+        waiting_.push_back(w);
+    if (p.lowering->failed)
+      reportError(p.loaded, error);
+    else if (p.attempts > 0)
+      reportError(p.loaded, "shader error: " + error.trimmed());
+    // One loadFinished per attempt; reportError sent the first.
+    for (int i = 1; i < p.attempts; ++i) emit loadFinished(false);
+    watch();
   });
+  connect(viewport_, &Viewport::buildStarted, this, &MainWindow::showTiming);
 
   connect(viewport_, &Viewport::clicked, this, [this](QPointF pos) { pickAt(pos); });
 
@@ -148,7 +160,9 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
 void MainWindow::openFile(const QString& path) {
   file_ = absolute(path);
   Doc doc;
-  if (!loadInto(doc, file_, true) || !apply(std::move(doc), true, file_, true))
+  if (loadInto(doc, file_, true))
+    apply(std::move(doc), true, file_, true, {}, {{file_, true}});
+  else
     waiting_.emplace_back(file_, true);
   watch();
 }
@@ -156,7 +170,9 @@ void MainWindow::openFile(const QString& path) {
 void MainWindow::addFile(const QString& path) {
   file_ = absolute(path);
   Doc doc = latest();
-  if (!loadInto(doc, file_, false) || !apply(std::move(doc), true, file_, true))
+  if (loadInto(doc, file_, false))
+    apply(std::move(doc), true, file_, true, {}, {{file_, false}});
+  else
     waiting_.emplace_back(file_, false);
   watch();
 }
@@ -185,8 +201,11 @@ void MainWindow::removeObject(int id) {
 void MainWindow::setObjectVisible(int id, bool visible) {
   SceneObject* o = doc_.scene.find(id);
   const LoweredObject* lo = loweredObject(lowered_, id);
-  if (!o || !lo || pending_) return;
+  if (!o || !lo) return;
   o->visible = visible;
+  // A scene still compiling keeps the flag too (carryValues).
+  if (pending_)
+    if (SceneObject* q = pending_->doc.scene.find(id)) q->visible = visible;
   const std::vector<float> value{visible ? 1.0f : 0.0f};
   viewport_->setParameter(lo->visibleBinding, value);
   parameters_->showValue(lo->visibleBinding, value);
@@ -204,7 +223,8 @@ void MainWindow::selectObject(int id) {
 }
 
 int MainWindow::pickAt(QPointF pos) {
-  if (!viewport_->hasScene() || pending_ || doc_.scene.isEmpty()) {
+  // The scene on screen, even while another compiles.
+  if (!viewport_->hasScene() || doc_.scene.isEmpty()) {
     selectObject(0);
     return 0;
   }
@@ -276,34 +296,62 @@ bool MainWindow::loadInto(Doc& doc, const QString& path, bool replace) {
   return true;
 }
 
-bool MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
-                       const std::set<int>& fresh) {
+void MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
+                       const std::set<int>& fresh,
+                       std::vector<std::pair<QString, bool>> waits) {
   Pending p;
   p.doc = std::move(doc);
   p.loaded = loaded;
-  p.attempt = attempt;
-  try {
-    p.lowered = lowerScene(p.doc.scene);
-  } catch (const fg::GraphError& e) {
-    const QString pointer = QString::fromStdString(e.pointer());
-    reportError(loaded, QString("field-graph error%1%2: %3")
-                            .arg(pointer.isEmpty() ? "" : " at ", pointer,
-                                 QString::fromUtf8(e.what())));
-    return false;
-  } catch (const std::exception& e) {
-    reportError(loaded, QString("field-graph error: %1").arg(QString::fromUtf8(e.what())));
-    return false;
+  p.attempts = attempt ? 1 : 0;
+  p.fresh = fresh;
+  p.waits = std::move(waits);
+  // A scene still compiling is replaced: this one builds on its doc, and ends
+  // its attempts.
+  if (pending_) {
+    p.attempts += pending_->attempts;
+    p.fresh.insert(pending_->fresh.begin(), pending_->fresh.end());
+    p.waits.insert(p.waits.begin(), pending_->waits.begin(), pending_->waits.end());
+    if (p.loaded.isEmpty()) p.loaded = pending_->loaded;
   }
+  p.lowering = std::make_shared<Lowering>();
+  pending_ = std::move(p);
 
-  // An object whose graph did not change keeps its parameter edits (its
-  // visible flag and colour come from the scene, which follows them).
-  const LoweredScene& before = pending_ ? pending_->lowered : lowered_;
-  const std::vector<fg::UniformBinding>& values =
-      pending_ ? pending_->lowered.scene.bindings : viewport_->scene().bindings;
-  std::vector<fg::UniformBinding>& bindings = p.lowered.scene.bindings;
-  for (const LoweredObject& now : p.lowered.objects) {
-    const LoweredObject* old = loweredObject(before, now.id);
-    if (!old || fresh.count(now.id) ||
+  // DualC's codegen (mesh bakes included) runs on the compile thread.
+  viewport_->buildScene(
+      [lowering = pending_->lowering, scene = pending_->doc.scene]() {
+        try {
+          lowering->lowered = lowerScene(scene);
+        } catch (const fg::GraphError& e) {
+          lowering->failed = true;
+          const std::string pointer = e.pointer();
+          throw std::runtime_error("field-graph error" +
+                                   (pointer.empty() ? "" : " at " + pointer) + ": " +
+                                   e.what());
+        } catch (const std::exception& e) {
+          lowering->failed = true;
+          throw std::runtime_error(std::string("field-graph error: ") + e.what());
+        }
+        return lowering->lowered.scene;
+      },
+      frame, [this](fg::GlslScene& scene) { carryValues(scene); });
+  showTiming();
+}
+
+// An object whose graph did not change keeps its parameter edits, those made
+// while the scene compiled included; its visible flag and colour come from
+// the doc, which the Objects dock keeps.
+void MainWindow::carryValues(fg::GlslScene& scene) {
+  if (!pending_) return;
+  const std::vector<fg::UniformBinding>& values = viewport_->scene().bindings;
+  std::vector<fg::UniformBinding>& bindings = scene.bindings;
+  for (const LoweredObject& now : pending_->lowering->lowered.objects) {
+    if (const SceneObject* o = pending_->doc.scene.find(now.id)) {
+      bindings[std::size_t(now.visibleBinding)].value = {o->visible ? 1.0f : 0.0f};
+      bindings[std::size_t(now.colourBinding)].value = {o->colour[0], o->colour[1],
+                                                        o->colour[2]};
+    }
+    const LoweredObject* old = loweredObject(lowered_, now.id);
+    if (!viewport_->hasScene() || !old || pending_->fresh.count(now.id) ||
         old->endBinding - old->firstBinding != now.endBinding - now.firstBinding ||
         old->endBinding > int(values.size()))
       continue;
@@ -316,16 +364,12 @@ bool MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
         bindings[std::size_t(i)].value = from.value;
     }
   }
-
-  pending_ = std::move(p);
-  // sceneApplied or sceneFailed may come back before setScene returns.
-  viewport_->setScene(pending_->lowered.scene, frame);
-  return true;
+  pending_->lowering->lowered.scene.bindings = bindings;
 }
 
 void MainWindow::commit(Pending p) {
   doc_ = std::move(p.doc);
-  lowered_ = std::move(p.lowered);
+  lowered_ = p.lowering ? std::move(p.lowering->lowered) : LoweredScene{};
   picker_.reset();
   waiting_.erase(std::remove_if(waiting_.begin(), waiting_.end(),
                                 [this](const std::pair<QString, bool>& w) {
@@ -344,7 +388,7 @@ void MainWindow::commit(Pending p) {
   selectObject(selected_);
   watch();
   showTiming();
-  if (!p.attempt) return;
+  if (p.attempts == 0) return;
   const QString name = QFileInfo(p.loaded).fileName();
   statusBar()->showMessage(QString("Loaded %1: %2 objects, %3 nodes, %4 parameters")
                                .arg(name)
@@ -354,7 +398,7 @@ void MainWindow::commit(Pending p) {
   log(QString("loaded %1, shader compile %2 ms")
           .arg(p.loaded)
           .arg(viewport_->compileMs(), 0, 'f', 1));
-  emit loadFinished(true);
+  for (int i = 0; i < p.attempts; ++i) emit loadFinished(true);
 }
 
 // The Objects dock, and the Parameters dock with each object's bindings under
@@ -406,16 +450,21 @@ void MainWindow::parameterEdited(int index, std::vector<float> value) {
     parameters_->showValue(lo.boxMinBinding, boxMin);
     parameters_->showValue(lo.boxMaxBinding, boxMax);
   }
-  if (pending_) return;
+  // The doc on screen, and the one compiling (carryValues reads its flags).
   for (const LoweredObject& lo : lowered_.objects) {
-    SceneObject* o = doc_.scene.find(lo.id);
-    if (!o) continue;
-    if (index == lo.visibleBinding && value.size() == 1) {
-      o->visible = value[0] > 0.5f;
-      objects_->setObjectVisible(lo.id, o->visible);
-    } else if (index == lo.colourBinding && value.size() == 3) {
-      o->colour = {value[0], value[1], value[2]};
-      objects_->setObjectColour(lo.id, o->colour);
+    for (Doc* doc : {&doc_, pending_ ? &pending_->doc : nullptr}) {
+      SceneObject* o = doc ? doc->scene.find(lo.id) : nullptr;
+      if (!o) continue;
+      if (index == lo.visibleBinding && value.size() == 1)
+        o->visible = value[0] > 0.5f;
+      else if (index == lo.colourBinding && value.size() == 3)
+        o->colour = {value[0], value[1], value[2]};
+    }
+    if (const SceneObject* o = doc_.scene.find(lo.id)) {
+      if (index == lo.visibleBinding && value.size() == 1)
+        objects_->setObjectVisible(lo.id, o->visible);
+      else if (index == lo.colourBinding && value.size() == 3)
+        objects_->setObjectColour(lo.id, o->colour);
     }
   }
 }
@@ -515,8 +564,12 @@ void MainWindow::showTiming() {
   const auto ms = [](double v) {
     return v < 0.0 ? QString("-") : QString("%1 ms").arg(v, 0, 'f', 1);
   };
+  // While a scene compiles, the last one stays on screen and the compile
+  // time waits for the new one.
   QString text = QString("compile %1   frame %2")
-                     .arg(ms(viewport_->hasScene() ? viewport_->compileMs() : -1.0),
+                     .arg(viewport_->building()
+                              ? QString("…")
+                              : ms(viewport_->hasScene() ? viewport_->compileMs() : -1.0),
                           ms(frameMs_));
   if (previewMs_ >= 0.0) text += QString("   preview %1").arg(ms(previewMs_));
   timing_->setText(text);

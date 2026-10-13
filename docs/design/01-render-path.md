@@ -102,7 +102,7 @@ DualC's codegen has two edit tiers. A structural change recompiles. A change to 
 - **Counting links.** `TraceRenderer::linkCount` counts `glLinkProgram` calls.
   `parameter_dock_test` checks that edits leave it unchanged and that a changed save adds
   one.
-- **Compile time.** `TraceRenderer::setScene` times the vertex and fragment compile and
+- **Compile time.** `TraceRenderer::setScene` (and `linkProgram` on the compile thread) times the vertex and fragment compile and
   the link with a `QElapsedTimer`, up to the `GL_LINK_STATUS` read, which waits for the
   link. It is GL time only: DualC's parse and codegen are not in it.
 - **GPU frame time.** `paintGL` wraps each frame (the preview blit included) in a
@@ -113,6 +113,48 @@ DualC's codegen has two edit tiers. A structural change recompiles. A change to 
   `gpuFrameTimed(preview, traced, ms)`. It stops when none are left, so an idle widget
   still does nothing. The status bar shows the last full-resolution (settled) frame and
   the last preview frame.
+
+## Asynchronous compile (P07 T2, closes E-21)
+
+A structural edit (open, add, delete, reload) no longer blocks the GUI thread.
+
+- **Two threads, one share group.** `Viewport::buildScene(make, frame, finish)` hands the
+  edit to a compile thread (`Viewport::Compiler`, a `QThread`). That thread owns a
+  `QOpenGLContext` made with `setShareContext(widget context)`, current on a
+  `QOffscreenSurface`, both created on the GUI thread when the first build starts. On it,
+  `make` runs DualC's codegen (`MainWindow` passes `lowerScene`, mesh bakes included), then
+  `TraceRenderer::linkProgram` compiles and links, timed as before, then `glFinish`, so the
+  widget's context only ever sees a finished program. The result goes back to the GUI
+  thread as a queued call.
+- **The swap.** On the GUI thread, `finish` may edit the binding values (the window's
+  `carryValues`: parameter edits and Objects-dock flags made while the scene compiled).
+  Then `TraceRenderer::adoptProgram` takes the program, uploads the mesh grids and every
+  binding, and sets the trace constants, all between two frames. A frame therefore draws
+  the old program with the old values, or the new program with the new values, never a mix.
+  Until then the widget keeps drawing the old program; camera moves and parameter edits
+  work on it.
+- **The last edit wins.** Every scene change (`buildScene`, `setScene`, `clearScene`)
+  takes a new ticket. The thread takes only the newest build waiting. A result whose ticket
+  is not the last build's is dropped and its program deleted. `MainWindow::apply` builds
+  each edit on the doc still compiling (`latest()`), so an add during a compile gives a
+  scene with both objects. The replaced edit's load attempts end with the last one's
+  `loadFinished`.
+- **Failures.** A codegen exception or a compile or link log comes back as `sceneFailed`;
+  the old program, grids and image stay, as before. The window reports a lowering error as
+  a field-graph error and the rest as a shader error, and watches the files of every add
+  merged into the failed edit.
+- **Context changes.** `releaseGL` stops the thread, which first finishes any link under
+  way, since a GL link cannot be cut short. A build in flight starts again on the next
+  context, and results linked on the old context are not touched.
+- **What stays synchronous.** `Viewport::setScene` still links on the GUI thread. `--bench`
+  uses it, so its `compileMs` measures what it did before. `--snapshot` uses
+  `TraceRenderer::setScene`. The reparenting relink also stays synchronous.
+- **No program cache.** The driver's disk cache already brings a source seen before to
+  14–31 ms on the GTX (`../roadmap/02-measurements.md`). An editor-side cache is not built.
+
+`async_compile_test` checks the swap image by image while frames are drawn, the last of two
+builds, both failures, and the window's add during a compile (llvmpipe and NV92,
+2026-10-13).
 
 ## Measurement run (P00 T5)
 

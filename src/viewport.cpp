@@ -6,10 +6,15 @@
 #include <QLoggingCategory>
 #include <QMouseEvent>
 #include <QOpenGLContext>
+#include <QOffscreenSurface>
 #include <QOpenGLFunctions>
+#include <QThread>
 #include <QWheelEvent>
 
 #include <algorithm>
+#include <condition_variable>
+#include <exception>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -17,7 +22,29 @@
 // QT_LOGGING_RULES="dce.viewport.paint.debug=true".
 Q_LOGGING_CATEGORY(lcPaint, "dce.viewport.paint", QtInfoMsg)
 
-Viewport::Viewport(dce::fieldgraph::GlslScene scene, float previewScale, QWidget* parent)
+namespace fg = dce::fieldgraph;
+
+struct Viewport::Build {
+  SceneMaker make;
+  SceneFinish finish;
+  bool frame = false;
+  int ticket = 0;
+};
+
+// One thread with its own context, in the widget context's share group: a
+// program linked there is drawn by the widget. It takes the newest build
+// waiting; one superseded before it starts is never run.
+struct Viewport::Compiler {
+  QOffscreenSurface surface;
+  QOpenGLContext* context = nullptr;
+  QThread* thread = nullptr;
+  std::mutex mutex;
+  std::condition_variable wake;
+  std::shared_ptr<Build> next;
+  bool quit = false;
+};
+
+Viewport::Viewport(fg::GlslScene scene, float previewScale, QWidget* parent)
     : Viewport(previewScale, parent) {
   setScene(std::move(scene), true);
 }
@@ -52,8 +79,10 @@ void Viewport::initializeGL() {
     const QSurfaceFormat f = context()->format();
     qCritical().noquote() << "Viewport: need an OpenGL 3.3 core context, got"
                           << QString("%1.%2").arg(f.majorVersion()).arg(f.minorVersion());
-    if (pending_) {
+    if (pending_ || build_) {
       pending_.reset();
+      build_.reset();
+      building_ = false;
       emit sceneFailed("no OpenGL 3.3 core context");
     }
     return;
@@ -73,6 +102,8 @@ void Viewport::initializeGL() {
     if (!renderer_.setScene(scene_, &error))
       qCritical().noquote() << "Viewport:" << QString::fromStdString(error);
   }
+  // A build asked for before GL was up, or cut off by a context change.
+  if (build_) startBuild();
   // Open inside the settle window, as dualc_field_view does: the first frame
   // is a quick preview instead of a heavy full-resolution trace.
   settle_.start();
@@ -116,8 +147,13 @@ void Viewport::setScene(dce::fieldgraph::GlslScene scene, bool frame) {
     // earlier pending one; a frame request is kept.
     pendingFrame_ = pending_ ? pendingFrame_ || frame : frame;
     pending_ = std::move(scene);
+    build_.reset();
+    building_ = false;
     return;
   }
+  ++ticket_;
+  build_.reset();
+  building_ = false;
   if (!glReady_) {
     emit sceneFailed("no OpenGL 3.3 core context");
     return;
@@ -127,8 +163,146 @@ void Viewport::setScene(dce::fieldgraph::GlslScene scene, bool frame) {
   doneCurrent();
 }
 
+void Viewport::buildScene(SceneMaker make, bool frame, SceneFinish finish) {
+  pending_.reset();
+  // A frame asked by a build this one replaces is kept.
+  const bool keepFrame = build_ && build_->frame;
+  build_ = std::make_shared<Build>();
+  build_->make = std::move(make);
+  build_->finish = std::move(finish);
+  build_->frame = frame || keepFrame;
+  building_ = true;
+  if (!context()) return;  // initializeGL starts it
+  if (!glReady_) {
+    build_.reset();
+    building_ = false;
+    emit sceneFailed("no OpenGL 3.3 core context");
+    return;
+  }
+  startBuild();
+}
+
+void Viewport::startBuild() {
+  if (!compiler_) {
+    auto c = std::make_unique<Compiler>();
+    c->surface.setFormat(context()->format());
+    c->surface.create();
+    c->context = new QOpenGLContext;
+    c->context->setFormat(context()->format());
+    c->context->setShareContext(context());
+    if (!c->surface.isValid() || !c->context->create()) {
+      delete c->context;
+      build_.reset();
+      building_ = false;
+      emit sceneFailed("cannot create the shader compile context");
+      return;
+    }
+    Compiler* raw = c.get();
+    c->thread = QThread::create([this, raw] {
+      QOpenGLContext* ctx = raw->context;
+      QOpenGLFunctions_3_3_Core gl;
+      const bool ready = ctx->makeCurrent(&raw->surface) && gl.initializeOpenGLFunctions();
+      for (;;) {
+        std::shared_ptr<Build> b;
+        {
+          std::unique_lock<std::mutex> lock(raw->mutex);
+          raw->wake.wait(lock, [raw] { return raw->quit || raw->next; });
+          if (raw->quit) break;
+          b = std::move(raw->next);
+        }
+        // DualC's codegen, then the GL compile and link, timed as setScene.
+        auto scene = std::make_shared<fg::GlslScene>();
+        QString error;
+        GLuint program = 0;
+        int compiles = 0, links = 0;
+        double ms = 0.0;
+        try {
+          *scene = b->make();
+        } catch (const std::exception& e) {
+          error = QString::fromUtf8(e.what());
+        }
+        if (error.isEmpty() && !ready) error = "the shader compile context is not current";
+        if (error.isEmpty()) {
+          std::string log;
+          program = TraceRenderer::linkProgram(gl, *scene, &log, &compiles, &links, &ms);
+          // The widget's context sees a finished program only.
+          if (program) gl.glFinish();
+          else error = QString::fromStdString(log);
+        }
+        const int ticket = b->ticket;
+        QMetaObject::invokeMethod(
+            this,
+            [this, ticket, program, scene, error, compiles, links, ms] {
+              buildDone(ticket, program, std::move(*scene), error, compiles, links, ms);
+            },
+            Qt::QueuedConnection);
+      }
+      ctx->doneCurrent();
+      ctx->moveToThread(QCoreApplication::instance()->thread());
+    });
+    c->context->moveToThread(c->thread);
+    c->thread->start();
+    compiler_ = std::move(c);
+  }
+  build_->ticket = ++ticket_;
+  {
+    std::lock_guard<std::mutex> lock(compiler_->mutex);
+    compiler_->next = build_;
+  }
+  compiler_->wake.notify_one();
+  emit buildStarted();
+}
+
+void Viewport::buildDone(int ticket, GLuint program, fg::GlslScene scene, QString error,
+                         int compiles, int links, double ms) {
+  renderer_.countElsewhere(compiles, links);
+  // The context went, and the program with it.
+  if (!glReady_ || ticket <= deadTicket_) return;
+  if (!build_ || ticket != build_->ticket) {
+    // Superseded: never shown.
+    if (program) {
+      makeCurrent();
+      renderer_.dropProgram(program);
+      doneCurrent();
+    }
+    return;
+  }
+  const std::shared_ptr<Build> b = std::move(build_);
+  building_ = false;
+  if (!program) {
+    // The previous program, grids and image stay: nothing repaints.
+    emit sceneFailed(error);
+    return;
+  }
+  if (b->finish) b->finish(scene);
+  // Program, grids, bindings and trace constants change together, between
+  // two frames: no frame draws one scene's program with the other's values.
+  makeCurrent();
+  renderer_.adoptProgram(program, scene, ms);
+  doneCurrent();
+  takeScene(std::move(scene), b->frame);
+}
+
+void Viewport::stopCompiler() {
+  if (!compiler_) return;
+  {
+    std::lock_guard<std::mutex> lock(compiler_->mutex);
+    compiler_->quit = true;
+    compiler_->next.reset();
+  }
+  compiler_->wake.notify_one();
+  // A compile under way finishes first: a GL link cannot be cut short.
+  compiler_->thread->wait();
+  delete compiler_->thread;
+  delete compiler_->context;
+  compiler_.reset();
+}
+
 void Viewport::clearScene() {
   pending_.reset();
+  ++ticket_;
+  build_.reset();
+  building_ = false;
   if (!hasScene_) return;
   hasScene_ = false;
   scene_ = {};
@@ -147,6 +321,10 @@ void Viewport::linkScene(dce::fieldgraph::GlslScene scene, bool frame) {
     emit sceneFailed(QString::fromStdString(error));
     return;
   }
+  takeScene(std::move(scene), frame);
+}
+
+void Viewport::takeScene(fg::GlslScene scene, bool frame) {
   const bool first = !hasScene_;
   scene_ = std::move(scene);
   hasScene_ = true;
@@ -278,6 +456,10 @@ void Viewport::keyPressEvent(QKeyEvent* event) {
 
 void Viewport::releaseGL() {
   if (!glReady_ || !context()) return;
+  // A build in flight starts again on the next context (initializeGL); what
+  // the stopped thread sent back belongs to this context's share group.
+  stopCompiler();
+  deadTicket_ = ticket_;
   makeCurrent();
   renderer_.release();
   doneCurrent();

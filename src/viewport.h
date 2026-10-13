@@ -11,6 +11,8 @@
 #include <QTimer>
 
 #include <deque>
+#include <functional>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -41,6 +43,21 @@ class Viewport : public QOpenGLWidget {
   // camera stays where it is (a reload). A failed link emits sceneFailed and
   // leaves the previous scene, and its image, in place.
   void setScene(dce::fieldgraph::GlslScene scene, bool frame);
+  // Swap in a new scene without blocking the GUI thread (P07 T2, E-21).
+  // `make` runs on the compile thread: DualC's codegen, no GL. It throws
+  // std::exception to fail. The program is compiled and linked there, on a
+  // context shared with the widget's, while the widget keeps drawing the scene
+  // on screen. Back on the GUI thread, `finish` (when given) may edit the
+  // scene's binding values, then the program, grids and bindings are taken
+  // in one step, and sceneApplied follows as for setScene. A failure emits
+  // sceneFailed with the exception's text or the shader log, and the scene on
+  // screen stays. Only the last build counts: a later buildScene, setScene or
+  // clearScene drops an earlier build's result unseen.
+  using SceneMaker = std::function<dce::fieldgraph::GlslScene()>;
+  using SceneFinish = std::function<void(dce::fieldgraph::GlslScene&)>;
+  void buildScene(SceneMaker make, bool frame, SceneFinish finish = {});
+  // A buildScene has not come back yet.
+  bool building() const { return building_; }
   // Take the scene off screen: the viewport shows the background, and the
   // camera stays. Links nothing.
   void clearScene();
@@ -91,6 +108,8 @@ class Viewport : public QOpenGLWidget {
   // frame painted while every query is still in flight has no GPU time.
   void gpuFrameTimed(bool preview, QSize traced, double ms);
   void sceneApplied();
+  // A buildScene started on the compile thread.
+  void buildStarted();
   // A left click (press and release with no drag) at `pos`, in widget pixels.
   // It moves nothing; the window picks the object under it.
   void clicked(QPointF pos);
@@ -117,6 +136,15 @@ class Viewport : public QOpenGLWidget {
   void viewChanged();
   // Read back the GPU timer queries that have finished.
   void pollGpuTimers();
+  // The compile thread, its shared context and the build in flight.
+  struct Compiler;
+  struct Build;
+  void startBuild();
+  // Take `scene`, already on the renderer, as the scene on screen.
+  void takeScene(dce::fieldgraph::GlslScene scene, bool frame);
+  void buildDone(int ticket, GLuint program, dce::fieldgraph::GlslScene scene,
+                 QString error, int compiles, int links, double ms);
+  void stopCompiler();
   bool moving() const { return drag_ != Drag::None || settle_.isActive(); }
 
   dce::fieldgraph::GlslScene scene_;  // the scene on screen, once hasScene_
@@ -124,6 +152,11 @@ class Viewport : public QOpenGLWidget {
   // A scene given before GL was up, and whether to frame it.
   std::optional<dce::fieldgraph::GlslScene> pending_;
   bool pendingFrame_ = false;
+  std::unique_ptr<Compiler> compiler_;
+  std::shared_ptr<Build> build_;  // the last buildScene, until it comes back
+  int ticket_ = 0;  // bumped by every scene change; older builds are stale
+  int deadTicket_ = 0;  // builds up to this one linked on a context now gone
+  bool building_ = false;
   OrbitCamera camera_;
   TraceRenderer renderer_;
   bool glReady_ = false;

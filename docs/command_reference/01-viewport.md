@@ -98,6 +98,24 @@ do) is followed too. A save with the same text, or a change to another file in t
 loads and paints nothing. A mesh file the graph names is not watched: editing it does not
 reload.
 
+### While a scene compiles
+
+Opening, adding, deleting and reloading compile the scene's shader off the GUI thread. While
+it compiles:
+
+- the viewport keeps showing the previous scene, and orbit, pan, zoom, `F`, picking and the
+  docks keep working on it;
+- the status bar's right side reads `compile …`; the left side keeps the last message until
+  the new scene is on screen (`Loaded …`) or fails;
+- a hide, show, recolour or parameter edit made meanwhile is kept by the new scene, for the
+  objects it keeps;
+- another open, add, delete or reload replaces the edit in flight: the window shows the
+  last edit's scene, with every object added meanwhile. The replaced edit is never shown.
+
+The new scene appears in one step, at its first frame. A scene that fails to compile leaves
+the previous one on screen, as below. If an add fails while another add replaced it, both
+files are watched, and each one is added by its next save.
+
 ### Errors
 
 A graph that cannot be read, a field-graph error, or a shader compile or link error goes to:
@@ -121,7 +139,7 @@ the pointer is a character offset.
 | `View` menu | `Objects`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Parameters. One row per object. See *Objects* below. |
-| Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. See *Timing* below. |
+| Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. While a scene compiles it reads `compile …`. See *Timing* and *While a scene compiles* below. |
 | Parameters dock | On the right. One editor per parameter of the scene on screen. See *Parameters* below. |
 | Log dock | At the bottom, five lines high, read-only. One line per load (with its shader compile ms), reload and error. |
 

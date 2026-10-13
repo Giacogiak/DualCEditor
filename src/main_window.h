@@ -11,6 +11,7 @@
 #include <QTimer>
 
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <string>
@@ -101,12 +102,22 @@ class MainWindow : public QMainWindow {
     Scene scene;
     std::map<int, QString> files;  // object id -> its graph file
   };
-  // A Doc lowered and sent to the viewport, until it is linked.
+  // The lowering of a Pending's doc, written on the compile thread
+  // (Viewport::buildScene) and read once it has come back.
+  struct Lowering {
+    LoweredScene lowered;
+    bool failed = false;  // the lowering threw: the error is a field-graph one
+  };
+  // A Doc sent to the viewport, lowered and linked off the GUI thread, until
+  // it comes back. A later change replaces it and inherits what it carried.
   struct Pending {
     Doc doc;
-    LoweredScene lowered;
+    std::shared_ptr<Lowering> lowering;
     QString loaded;  // the file named by the status bar, empty for none
-    bool attempt = false;  // a load attempt: emits loadFinished
+    int attempts = 0;  // load attempts it ends: one loadFinished each
+    std::set<int> fresh;  // objects whose graph was reloaded: file values
+    // Files opened (true) or added (false) by it, watched if it fails.
+    std::vector<std::pair<QString, bool>> waits;
   };
 
   void openDialog();
@@ -114,11 +125,16 @@ class MainWindow : public QMainWindow {
   // Read and parse `path` into a new object of `doc` (of an empty doc when
   // `replace`). False, reported, on an error.
   bool loadInto(Doc& doc, const QString& path, bool replace);
-  // Lower `doc` and send it to the viewport. Bindings of objects not in
-  // `fresh` (the ids whose graph was just reloaded) keep their current values.
-  // False, reported, when it does not lower.
-  bool apply(Doc doc, bool frame, const QString& loaded, bool attempt,
-             const std::set<int>& fresh = {});
+  // Send `doc` to the viewport, to be lowered and linked off the GUI thread.
+  // When it comes back, bindings of objects not in `fresh` (the ids whose
+  // graph was just reloaded) keep the values on screen (carryValues). An
+  // error is reported then, and the files of `waits` are watched.
+  void apply(Doc doc, bool frame, const QString& loaded, bool attempt,
+             const std::set<int>& fresh = {},
+             std::vector<std::pair<QString, bool>> waits = {});
+  // The pending scene, just linked, takes the values on screen of the objects
+  // it keeps, and the visible flags and colours of the pending doc.
+  void carryValues(dce::fieldgraph::GlslScene& scene);
   // The doc the next change builds on: the one on its way to the viewport,
   // else the one on screen.
   const Doc& latest() const { return pending_ ? pending_->doc : doc_; }
