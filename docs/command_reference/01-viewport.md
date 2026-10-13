@@ -186,7 +186,7 @@ the pointer is a character offset.
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
-| `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference`, and the `Blend k` spin box of the smooth ones. Greyed out with fewer than two objects selected. No shortcut. See *Booleans* below. |
+| `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference`, and the `Blend k` spin box of the smooth ones, greyed out with fewer than two objects selected (see *Booleans* below); `Fill with TPMS…` and `Fill with Lattice…`, greyed out with no object selected (see *Fills* below). No shortcut. |
 | `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
@@ -261,6 +261,39 @@ object is selected once its shader links.
   `smooth-union of bunny.stl, ball.json, k 0.25 mm; normalize on bunny.stl, not distance
   fields (E-10)`. A sharp boolean takes every operand as it is.
 
+## Fills
+
+Select one object, the volume, then pick `Operations ▸ Fill with TPMS…` or
+`Fill with Lattice…`. A dialog sets the fill; `OK` makes a new object, named
+`<type> fill <id>`, and hides the volume. The new object is selected once its shader links.
+The log and status bar read `octet fill of bunny.stl, wavelength 3.81 mm, radius 0.381 mm,
+node radius 0.381 mm`.
+
+| Dialog | Graph |
+|---|---|
+| `Fill with TPMS…` | `intersection(onion(normalize(tpms), thickness=t), volume)` |
+| `Fill with Lattice…` | `intersection(lattice, volume)` |
+
+| Field | Unit | Default |
+|---|---|---|
+| `Type` | | `gyroid` (TPMS: `gyroid`, `schwarz-p`, `diamond`, `fischer-koch`, `lidinoid`, `neovius`, DualC's `tpmsKinds`), `octet` (lattice: `sc`, `bcc`, `fcc`, `octet`, DualC's `strutKinds`). The tooltip of each says what it is. |
+| `Wavelength` | mm | A tenth of the diagonal of the volume's trace box (its bounds padded 5% a side, posed), three significant digits: about ten cells across, as DualC's `dualc_lattice`. |
+| `Wall thickness t` (TPMS) | mm | Wavelength / 5. Onion's `t` on the normalized TPMS: the wall is `2 t` across. |
+| `Radius` (lattice) | mm | Wavelength / 10, the radius of a strut at mid-span. |
+| `Node radius` (lattice) | mm | The radius. Larger, it tapers the struts, fat at the nodes (the costly P12 shape). |
+| `Keep the skin` | mm | Off. On, the thickness starts at the wall (`2 t`) or strut (`2 × radius`) width. |
+
+- **The cells are centred** on the volume's trace box: the TPMS phase origin, or a
+  lattice cell's centre.
+- **Keep the skin** adds a union with an onion of the volume:
+  `union(fill, onion(offset(volume, r=-s/2), thickness=s/2))`, the volume's inside within
+  `s` of its surface. The part keeps its size. A `[winding]` volume goes under `normalize`
+  there, since an onion reads distances.
+- **The result is an object like any other:** its parameters (wavelength, thickness,
+  radii) are in the Parameters dock, and a boolean takes it as an operand. A fill of a
+  `[mesh]` volume is metric; a fill of a `[winding]` one is not, so a smooth boolean wraps
+  it in `normalize` (E-10).
+
 ## Undo and redo
 
 Every change to the scene is one step on an undo stack (`../design/04-scene-model.md`):
@@ -269,7 +302,7 @@ Every change to the scene is one step on an undo stack (`../design/04-scene-mode
 |---|---|
 | Add (`File ▸ Add…`, a drop, a later command-line graph, an imported mesh) | Removes the object. Its id is not given to the next add. |
 | `Edit ▸ Make Watertight` | The `[winding]` object comes back. |
-| A boolean (`Operations` menu) | Removes the result and shows the operands that were shown. |
+| A boolean or a fill (`Operations` menu) | Removes the result and shows the operands, or the volume, that were shown. |
 | Delete | Puts the object back at its place, with its id, colour, name and parameter edits. |
 | Rename, show or hide, an edit of `colour` or `matrix` in the Parameters dock | The old value; one uniform, no recompile, no relink. |
 | A parameter edit | The old value; one uniform. Steps of one spin box in a row are one step. |
@@ -426,8 +459,10 @@ load, 77 with no GL 3.3 core context (on Linux with no display, as for `--snapsh
 over P01's scenes of 1 to 10 objects and P07's column stacked in depth (it then also
 prints the ms per added object). With `--meshes` it runs scenes of 1, 3 and 5 imported
 closed meshes (UV spheres written as OBJ, each a `mesh` node at the 96³ grid) at 0.35 and
-1.0 (P04 T2). `--unit ID` sets the unit id printed in each row (default `P00.5`, `P01.4`
-with `--objects`, `P04.2` with `--meshes`). Its checklists are in
+1.0 (P04 T2). With `--fills` it runs one imported UV sphere filled with an octet at the fill
+dialog's defaults, beside the P00 tapered octet, at 0.35 and 1.0 (P05 T2). `--unit ID` sets
+the unit id printed in each row (default `P00.5`, `P01.4` with `--objects`, `P04.2` with
+`--meshes`, `P05.2` with `--fills`). Its checklists are in
 `docs/roadmap/02-measurements.md`.
 
 ```bash

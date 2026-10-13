@@ -1,5 +1,6 @@
 #include "main_window.h"
 
+#include "fill_dialog.h"
 #include "graph_file.h"
 #include "graph_scene.h"
 #include "mesh_library.h"
@@ -245,6 +246,15 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   auto* kAction = new QWidgetAction(opMenu);
   kAction->setDefaultWidget(kRow);
   opMenu->addAction(kAction);
+  // Fills (P05 T2), on the selected object.
+  opMenu->addSeparator();
+  for (const bool lattice : {false, true}) {
+    QAction* a = opMenu->addAction(lattice ? "Fill with &Lattice..." : "Fill with T&PMS...", this,
+                                   [this, lattice] { fillDialog(lattice); });
+    a->setData(QString(lattice ? "fill-lattice" : "fill-tpms"));
+    a->setEnabled(false);
+    fillActions_.push_back(a);
+  }
   connect(objects_, &ObjectsPanel::selectionOrderChanged, this, &MainWindow::updateObjectActions);
   QMenu* viewMenu = menuBar()->addMenu("&View");
   viewMenu->addAction(objectsDock->toggleViewAction());
@@ -492,6 +502,7 @@ void MainWindow::updateObjectActions() {
   for (int id : objects_->selectedIds())
     if (document_.scene().find(id) && doc_.scene.find(id)) ++operands;
   for (QAction* a : booleanActions_) a->setEnabled(operands >= 2);
+  for (QAction* a : fillActions_) a->setEnabled(o && doc_.scene.find(selected_));
 }
 
 double MainWindow::smoothK() const { return smoothK_->value(); }
@@ -526,6 +537,42 @@ int MainWindow::applyBoolean(const std::string& op) {
   if (smooth) text += QString(", k %1 mm").arg(smoothK_->value());
   if (!wrapped.isEmpty())
     text += QString("; normalize on %1, not distance fields (E-10)").arg(wrapped.join(", "));
+  log(text);
+  statusBar()->showMessage(text);
+  selectAfter_ = id;
+  return id;
+}
+
+std::optional<dualc::BBox> MainWindow::worldBounds(int id) const {
+  const SceneObject* o = doc_.scene.find(id);
+  const LoweredObject* lo = loweredObject(lowered_, id);
+  if (!o || !lo) return std::nullopt;
+  return worldBox(lo->localBounds, o->transform, o->scale);
+}
+
+void MainWindow::fillDialog(bool lattice) {
+  const SceneObject* v = document_.scene().find(selected_);
+  const std::optional<dualc::BBox> box = worldBounds(selected_);
+  if (!v || !box) return;
+  FillDialog dialog(lattice ? FillDialog::Family::Lattice : FillDialog::Family::Tpms, v->name,
+                    *box, this);
+  if (dialog.exec() == QDialog::Accepted) applyFill(dialog.spec(), selected_);
+}
+
+int MainWindow::applyFill(const FillSpec& spec, int volume) {
+  const SceneObject* v = document_.scene().find(volume);
+  if (!v) return 0;
+  const QString name = v->name;
+  const int id = document_.applyFill(spec, volume);
+  if (!id) return 0;
+  QString text = QString("%1 fill of %2, wavelength %3 mm")
+                     .arg(QString::fromStdString(spec.kind), name)
+                     .arg(spec.wavelength);
+  if (isTpmsKind(spec.kind))
+    text += QString(", wall t %1 mm").arg(spec.thickness);
+  else
+    text += QString(", radius %1 mm, node radius %2 mm").arg(spec.radius).arg(spec.nodeRadius);
+  if (spec.skin > 0.0) text += QString(", skin %1 mm").arg(spec.skin);
   log(text);
   statusBar()->showMessage(text);
   selectAfter_ = id;

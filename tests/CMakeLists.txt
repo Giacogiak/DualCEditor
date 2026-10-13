@@ -164,7 +164,8 @@ add_test(NAME mesh_solid
 # Booleans and smooth booleans (P05 T1): each operation's field equals DualC's
 # on the graph written by hand, folded left over three operands, non-metric
 # operands of a smooth boolean under normalize (E-10); undo restores the
-# operands. GL-free.
+# operands. TPMS and strut-lattice fills (P05 T2), with and without a skin, the
+# same way, and a boolean on a fill. GL-free.
 add_executable(operations_test operations_test.cpp)
 target_link_libraries(operations_test PRIVATE dualceditor_core)
 dualceditor_target_options(operations_test)

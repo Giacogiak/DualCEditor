@@ -57,6 +57,8 @@ endfunction()
 add_library(dualceditor_core STATIC
   src/bench.cpp
   src/bench.h
+  src/fill_dialog.cpp
+  src/fill_dialog.h
   src/gizmo.cpp
   src/gizmo.h
   src/graph_file.cpp

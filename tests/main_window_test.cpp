@@ -12,6 +12,7 @@
 //
 // usage: main_window_test <DualCEditor> <gyroid_box.json>
 
+#include "fill_dialog.h"
 #include "main_window.h"
 #include "objects_panel.h"
 #include "transform_panel.h"
@@ -630,6 +631,88 @@ int main(int argc, char* argv[]) {
       check(runUntil([&] { return m.scene().objects().size() == 2; }, 30000) &&
                 m.scene().find(cube)->visible && m.scene().find(soup)->visible,
             "undo removes it and shows the operands again");
+    }
+  }
+
+  // Fills (P05 T2): an imported mesh filled with a gyroid, and separately with
+  // an octet lattice, at the defaults the fill dialogs show (in mm); each is
+  // on screen, changes the image, and hides the mesh; a union of the two fills
+  // works, and undo shows the mesh again.
+  {
+    MainWindow m(1.0f);
+    m.resize(480, 360);
+    m.show();
+    check(drop(m, tmp.filePath("closed.obj")) && nextLoad(m, 30000) == 1,
+          "fills: a closed mesh loads");
+    const int cube = m.scene().objects().empty() ? 0 : m.scene().objects().front().id;
+    m.selectObject(cube);
+    std::vector<QAction*> fillActions;
+    for (QAction* a : m.findChildren<QAction*>())
+      if (a->data().toString().startsWith("fill-")) fillActions.push_back(a);
+    check(fillActions.size() == 2 && fillActions[0]->isEnabled() && fillActions[1]->isEnabled(),
+          "Fill with TPMS and Fill with Lattice are on with one object selected");
+    const std::optional<dualc::BBox> box = m.worldBounds(cube);
+    check(bool(box), "the mesh's world box is known");
+    if (box) {
+      FillDialog tpms(FillDialog::Family::Tpms, "closed.obj", *box);
+      FillDialog lattice(FillDialog::Family::Lattice, "closed.obj", *box);
+      const FillSpec g = defaultFill("gyroid", *box), o = defaultFill("octet", *box);
+      const FillSpec tg = tpms.spec(), lo = lattice.spec();
+      check(tg.kind == "gyroid" && tg.wavelength == g.wavelength && tg.thickness == g.thickness &&
+                tg.skin == 0.0 && lo.kind == "octet" && lo.wavelength == o.wavelength &&
+                lo.radius == o.radius && lo.nodeRadius == o.nodeRadius,
+            "the dialogs open at the real defaults: wavelength " + std::to_string(g.wavelength) +
+                " mm, wall t " + std::to_string(g.thickness) + " mm, radius " +
+                std::to_string(o.radius) + " mm");
+      bool mm = true;
+      for (QDoubleSpinBox* b : tpms.findChildren<QDoubleSpinBox*>()) mm = mm && b->suffix() == " mm";
+      for (QDoubleSpinBox* b : lattice.findChildren<QDoubleSpinBox*>())
+        mm = mm && b->suffix() == " mm";
+      check(mm && tpms.findChildren<QDoubleSpinBox*>().size() == 3 &&
+                lattice.findChildren<QDoubleSpinBox*>().size() == 4,
+            "every length in the dialogs is in mm");
+      lattice.setSkin(true, 0.3);
+      check(lattice.spec().skin == 0.3, "the skin is taken when ticked");
+
+      Viewport& vp = *m.viewport();
+      const QImage solid = vp.grabFramebuffer();
+      int gyroidFill = 0, octetFill = 0;
+      for (const FillSpec& spec : {tg, lo}) {
+        const std::size_t n = m.scene().objects().size();
+        const int id = m.applyFill(spec, cube);
+        const bool shown = runUntil([&] { return m.scene().objects().size() == n + 1; }, 60000);
+        check(id && shown && m.selectedObject() == id && !m.scene().find(cube)->visible,
+              spec.kind + " fill: on screen, selected, the mesh hidden");
+        if (!shown) continue;
+        const SceneObject& r = *m.scene().find(id);
+        const bool tpmsShape = r.graph.op == "intersection" && r.graph.in.size() == 2 &&
+                               r.graph.in[0].op == "onion" &&
+                               r.graph.in[0].in[0].op == "normalize" &&
+                               r.graph.in[0].in[0].in[0].op == "gyroid" &&
+                               r.graph.in[1].op == "mesh";
+        const bool latticeShape = r.graph.op == "intersection" && r.graph.in.size() == 2 &&
+                                  r.graph.in[0].op == "octet" && r.graph.in[1].op == "mesh";
+        check(spec.kind == "gyroid" ? tpmsShape : latticeShape,
+              spec.kind + " fill: intersection(" +
+                  (spec.kind == "gyroid" ? "onion(normalize(gyroid))" : "octet") + ", mesh)");
+        runUntil([] { return false; }, 200);
+        const QImage filled = vp.grabFramebuffer();
+        check(!filled.isNull() && filled != solid, spec.kind + " fill: the image changes");
+        (spec.kind == "gyroid" ? gyroidFill : octetFill) = id;
+      }
+      if (gyroidFill && octetFill) {
+        m.objects()->selectInOrder({gyroidFill, octetFill});
+        const int u = m.applyBoolean("union");
+        check(u && runUntil([&] { return m.scene().find(u) != nullptr; }, 60000) &&
+                  m.scene().find(u)->graph.op == "union",
+              "a union of the gyroid fill and the octet fill is on screen");
+        m.undoStack()->undo();
+        m.undoStack()->undo();
+        m.undoStack()->undo();
+        check(runUntil([&] { return m.scene().objects().size() == 1; }, 60000) &&
+                  m.scene().find(cube)->visible,
+              "undo of the union and the two fills shows the mesh again");
+      }
     }
   }
 

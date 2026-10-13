@@ -13,6 +13,16 @@
 //  3. a sharp union, intersection and difference are min, max and max(a, -b)
 //     of the operands' own fields;
 //  4. the results lower to GLSL (normalize over winding and TPMS included).
+// And fills (P05 T2): a gyroid, a schwarz-p, an octet and a tapered bcc fill of
+// the sphere, the posed box and the winding box, with and without a skin:
+//  5. the defaults are the box diagonal / 10, its centre, t a fifth and the
+//     radii a tenth of the wavelength;
+//  6. the fill's field, read back as dualc_field reads it, equals the one of
+//     intersection(onion(normalize(tpms)), volume) or intersection(lattice,
+//     volume) written by hand, in a union with onion(offset(volume, -s / 2),
+//     s / 2) for a skin s, the winding under normalize there;
+//  7. the volume is hidden, undo restores it, and a boolean on the fill works;
+//  8. the skin is the volume's inside within s of its surface.
 
 #include "graph_file.h"
 #include "mesh_import.h"
@@ -215,6 +225,131 @@ int main(int argc, char** argv) {
       }
       // Back to the operands for the next selection.
       doc.undoStack()->undo();
+    }
+  }
+
+  // 5. Defaults, from a ±10 mm box: diagonal 34.64 mm.
+  {
+    const FillSpec d = defaultFill("octet", {{-10, -10, -10}, {10, 10, 10}});
+    check(d.wavelength == 3.46 && d.radius == 0.346 && d.nodeRadius == 0.346 &&
+              std::abs(d.center.x) + std::abs(d.center.y) + std::abs(d.center.z) == 0.0 &&
+              d.skin == 0.0,
+          "the lattice defaults: wavelength 3.46 mm (diagonal / 10), radii 0.346 mm, at the "
+          "centre, no skin");
+    const FillSpec g = defaultFill("gyroid", {{0, 0, 0}, {20, 20, 20}});
+    check(g.wavelength == 3.46 && g.thickness == 0.692 && g.center.x == 10.0,
+          "the TPMS defaults: wall t 0.692 mm (wavelength / 5), centred on the box");
+    check(isTpmsKind("gyroid") && isStrutKind("octet") && !isTpmsKind("octet") &&
+              !isStrutKind("sphere"),
+          "the kinds are DualC's");
+  }
+  {
+    FillSpec bad;
+    bad.kind = "sphere";
+    check(doc.applyFill(bad, ball.id) == 0 && doc.applyFill(FillSpec{}, 9999) == 0,
+          "a fill of an unknown kind or volume is refused");
+  }
+
+  // 6, 7. Fills against the graphs written by hand.
+  struct Fill {
+    FillSpec spec;
+    std::string source;  // its shorthand, in world coordinates
+  };
+  std::vector<Fill> fills;
+  {
+    FillSpec f;
+    f.kind = "gyroid";
+    f.wavelength = 5.0;
+    f.center = {1.0, -0.5, 0.25};
+    f.thickness = 0.75;
+    fills.push_back({f, "onion(normalize(gyroid(center=[1,-0.5,0.25],wavelength=5)),thickness=0.75)"});
+    f.kind = "schwarz-p";
+    fills.push_back({f, "onion(normalize(schwarz_p(center=[1,-0.5,0.25],wavelength=5)),thickness=0.75)"});
+    f.kind = "octet";
+    f.center = {0, 0, 0};
+    f.wavelength = 4.0;
+    f.radius = f.nodeRadius = 0.5;
+    fills.push_back({f, "octet(center=[0,0,0],wavelength=4,radius=0.5,nodeRadius=0.5)"});
+    f.kind = "bcc";
+    f.nodeRadius = 0.9;
+    fills.push_back({f, "bcc(center=[0,0,0],wavelength=4,radius=0.5,nodeRadius=0.9)"});
+  }
+  for (const Operand* volume : {&ball, &box, &winding}) {
+    for (const Fill& fill : fills) {
+      for (const double skin : {0.0, 2.0}) {
+        FillSpec spec = fill.spec;
+        spec.skin = skin;
+        const std::string what = spec.kind + " fill of " +
+                                 doc.scene().find(volume->id)->name.toStdString() +
+                                 (skin > 0.0 ? ", skin 2 mm" : "");
+        const Scene before = doc.scene();
+        const int id = doc.applyFill(spec, volume->id);
+        const SceneObject* r = doc.scene().find(id);
+        check(r && r->operands == std::vector<int>{volume->id} &&
+                  !doc.scene().find(volume->id)->visible,
+              what + ": a new object over the volume, which is hidden");
+        if (!r) continue;
+        const std::string posed = volume->posed(false);
+        std::string expected = "intersection(" + fill.source + "," + posed + ")";
+        if (skin > 0.0) {
+          const std::string metric = volume->metric ? posed : "normalize(" + posed + ")";
+          expected = "union(" + expected + ",onion(offset(" + metric + ",r=-1),thickness=1))";
+        }
+        const fg::GraphNode read = fg::parseJson(fg::dumpJson(r->graph));
+        const std::vector<double> got = values(read, points);
+        const double d = maxDiff(got, values(fg::parseShorthand(expected), points));
+        check(d <= 1e-12, what + ": the field matches DualC's on " + expected + " (max diff " +
+                              number(d) + ")");
+        check(isMetricGraph(r->graph) == volume->metric,
+              what + ": metric exactly when the volume is");
+        const fg::GraphNode graph = r->graph;
+        // A boolean on the filled result: the fill less a sphere.
+        const int cut = doc.addObject("cut", fg::parseShorthand("sphere(center=[4,0,0],radius=5)"));
+        const int diff = doc.applyOperation("difference", {}, {id, cut});
+        const SceneObject* c = doc.scene().find(diff);
+        if (c) {
+          const std::vector<double> sphere =
+              values(fg::parseShorthand("sphere(center=[4,0,0],radius=5)"), points);
+          std::vector<double> want;
+          for (std::size_t i = 0; i < got.size(); ++i) want.push_back(std::max(got[i], -sphere[i]));
+          check(maxDiff(values(fg::parseJson(fg::dumpJson(c->graph)), points), want) <= 1e-12,
+                what + ": a difference on the fill is max(fill, -sphere)");
+        } else {
+          check(false, what + ": a difference on the fill");
+        }
+        doc.undoStack()->undo();
+        doc.undoStack()->undo();
+        doc.undoStack()->undo();
+        check(sameScene(doc.scene(), before), what + ": undo restores the volume");
+        doc.undoStack()->redo();
+        const SceneObject* again = doc.scene().find(id);
+        check(again && sameGraph(again->graph, graph), what + ": redo brings it back");
+        doc.undoStack()->undo();
+      }
+    }
+  }
+
+  // 8. The skin, on the sphere (radius 10), with an sc lattice far and thin
+  // enough to be positive at the probes. Inside within 2 mm of the surface is
+  // solid, deeper and outside are not.
+  {
+    FillSpec spec;
+    spec.kind = "sc";
+    spec.wavelength = 100.0;
+    spec.center = {50, 50, 50};  // a cell's struts cross at its centre, 50 mm away
+    spec.radius = spec.nodeRadius = 0.01;
+    spec.skin = 2.0;
+    const int id = doc.applyFill(spec, ball.id);
+    const SceneObject* r = doc.scene().find(id);
+    if (r) {
+      const std::vector<double> v =
+          values(r->graph, {{0, 0, 9.0}, {0, 0, 8.5}, {0, 0, 7.5}, {0, 0, 10.5}});
+      check(v[0] < 0 && v[1] < 0 && v[2] > 0 && v[3] > 0 && std::abs(v[0] + 1.0) < 1e-9,
+            "the skin is the inside within 2 mm of the surface (-1 mm at depth 1 mm): " +
+                number(v[0]) + ", " + number(v[1]) + ", " + number(v[2]) + ", " + number(v[3]));
+      doc.undoStack()->undo();
+    } else {
+      check(false, "a skin fill of the sphere");
     }
   }
 

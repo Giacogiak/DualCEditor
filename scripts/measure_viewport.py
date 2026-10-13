@@ -8,13 +8,16 @@ in docs/roadmap/02-measurements.md. The owner runs it on the GTX 1050 Ti laptop.
   python scripts/measure_viewport.py --objects          # P01 T4, P07: frame time against object count
   python scripts/measure_viewport.py --objects --unit P07.3   # label the rows with another unit
   python scripts/measure_viewport.py --meshes           # P04 T2: frame time against imported meshes
+  python scripts/measure_viewport.py --fills            # P05 T2: an imported mesh filled with octet
 
 Without --objects, each P00 scene runs at preview scales 0.35, 0.5 and 1.0. With
 --objects, scenes of 1, 3, 5 and 10 analytic primitives side by side, of 1, 3, 5 and 10
 stacked in depth (P07 T1), and of 1 and 3 TPMS-in-box objects run at 0.35 and 1.0, and the
 script also prints the growth per added object. With --meshes, scenes of 1, 3 and 5
 imported closed meshes (UV spheres written as OBJ) run at 0.35 and 1.0, with the same
-growth line (P04 T2). Every run goes
+growth line (P04 T2). With --fills, one imported UV sphere filled with an octet lattice
+at the fill dialog's defaults runs at 0.35 and 1.0, beside the P00.5 tapered octet
+(P05 T2). Every run goes
 through `DualCEditor --bench` (docs/command_reference/01-viewport.md). The script prints
 one markdown row per run and appends the raw JSON lines to measurements-<date>.jsonl in the
 working directory.
@@ -263,6 +266,23 @@ def compare(exe: Path, field_view: Path, name: str, graph: Path, work: Path, env
     return f"{name}: {diff_png(ours, theirs)} (PNGs in {work})"
 
 
+def fill_scenes(work: Path) -> list[tuple[str, int, list[Path]]]:
+    """P05 T2: the UV sphere of mesh_scenes (radius 0.4, centre (0, 0.6, 0)) filled
+    with an octet at Fill with Lattice's defaults: the wavelength is a tenth of the
+    diagonal of its trace box (its bounds padded 5% a side, 0.88 mm a side), the radii a
+    tenth of that (scene_document.h, defaultFill)."""
+    sphere = work / "sphere_fill.obj"
+    sphere.write_text(sphere_obj(2))
+    w = round(1.1 * 0.8 * math.sqrt(3) / 10, 3)
+    r = round(w / 10, 4)
+    fill = work / "octet_fill.fld"
+    fill.write_text(f"intersection(octet(center=[0,0.6,0],wavelength={w:g},radius={r:g},"
+                    f"nodeRadius={r:g}),mesh(path=\"sphere_fill.obj\"))\n")
+    octet = work / "tapered_octet.fld"
+    octet.write_text(TAPERED_OCTET)
+    return [("octet fill of an imported mesh", 1, [fill]), ("tapered octet (P12)", 1, [octet])]
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exe", type=Path, default=default_exe(), help="DualCEditor binary")
@@ -281,6 +301,9 @@ def main() -> int:
     ap.add_argument("--meshes", action="store_true",
                     help="scenes of 1, 3 and 5 imported mesh objects at preview scales "
                          "0.35 and 1.0 (P04 T2)")
+    ap.add_argument("--fills", action="store_true",
+                    help="an imported mesh filled with an octet lattice at the fill "
+                         "defaults, beside the tapered octet, at 0.35 and 1.0 (P05 T2)")
     ap.add_argument("--keep", action="store_true", help="keep the scratch folder")
     ap.add_argument("--unit", help="unit id printed in each row (default P00.5, or P01.4 "
                                    "with --objects)")
@@ -298,7 +321,10 @@ def main() -> int:
     jsonl = Path(f"measurements-{date}.jsonl").resolve()
     rows, first, results = [], None, []
     try:
-        if args.meshes:
+        if args.fills:
+            todo = fill_scenes(work)
+            unit, scales = "P05.2", OBJECT_SCALES
+        elif args.meshes:
             todo = mesh_scenes(work)
             unit, scales = "P04.2", OBJECT_SCALES
         elif args.objects:
@@ -330,7 +356,7 @@ def main() -> int:
             for kind in kinds:
                 for scale in scales:
                     print(growth(results, kind, scale))
-        if args.field_view and not (args.objects or args.meshes):
+        if args.field_view and not (args.objects or args.meshes or args.fills):
             print("\nSnapshots, editor against dualc_field_view (800×600, default view):")
             for name, _, (graph,) in todo:
                 print(compare(args.exe, args.field_view, name, graph, work, env))

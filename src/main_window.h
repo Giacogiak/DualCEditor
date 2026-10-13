@@ -101,6 +101,17 @@ class MainWindow : public QMainWindow {
   int applyBoolean(const std::string& op);
   double smoothK() const;
   void setSmoothK(double k);
+  // Operations > Fill with TPMS and Fill with Lattice (P05 T2): open the fill
+  // dialog (fill_dialog.h) on the selected object, the volume, and apply its
+  // fill when accepted.
+  void fillDialog(bool lattice);
+  // Fill object `volume` with `spec` (SceneDocument::applyFill): one undo step,
+  // the volume hidden, the fill selected once on screen. Returns its id, 0 for
+  // an unknown volume or kind.
+  int applyFill(const FillSpec& spec, int volume);
+  // Object `id`'s world box as on screen (its trace box, posed), which the
+  // fill's defaults read; none when it is not on screen.
+  std::optional<dualc::BBox> worldBounds(int id) const;
   // Remove object `id` (a no-op for an unknown id). The camera stays; the last
   // object leaves the viewport empty.
   void removeObject(int id);
@@ -251,6 +262,7 @@ class MainWindow : public QMainWindow {
   QAction* renameAction_;
   QAction* watertightAction_;
   std::vector<QAction*> booleanActions_;
+  std::vector<QAction*> fillActions_;  // on one object on screen
   QDoubleSpinBox* smoothK_;
   int selectAfter_ = 0;  // the object to select when the scene next commits
   std::unique_ptr<WatertightJob> job_;

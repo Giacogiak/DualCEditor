@@ -12,6 +12,21 @@
 #include <string>
 #include <vector>
 
+// A fill (P05 T2): a volume's inside filled with a TPMS sheet or a strut
+// lattice, clipped to the volume (fillGraph). Lengths are in mm, the scene's
+// unit; `center` is in world coordinates.
+struct FillSpec {
+  // A TPMS token of DualC's tpmsKinds() (gyroid, schwarz-p, ...) or a strut
+  // token of strutKinds() (sc, bcc, fcc, octet).
+  std::string kind = "gyroid";
+  double wavelength = 1.0;           // the cell side
+  dualc::Vector3 center{0, 0, 0};    // a cell's centre, the TPMS phase origin
+  double thickness = 0.2;            // TPMS: onion's t, the wall is 2 t across
+  double radius = 0.1;               // strut: the radius at mid-span
+  double nodeRadius = 0.1;           // strut: the radius at the nodes (taper)
+  double skin = 0.0;                 // > 0: keep the volume's skin, this thick
+};
+
 // The scene the editor edits, and the undo stack every change to it goes
 // through (docs/design/04-scene-model.md). Each public edit pushes one
 // QUndoCommand; undo and redo restore the scene exactly, graphs, transforms,
@@ -87,6 +102,11 @@ class SceneDocument : public QObject {
                      const std::map<std::string, dce::fieldgraph::ParamValue>& params,
                      const std::vector<int>& operands, QString name = {});
 
+  // A fill (P05 T2): a new object, fillGraph(spec, volume), named after
+  // `spec.kind` ("octet fill 6"). The volume is hidden, as an operand. Returns
+  // the new id, 0 for an unknown volume or kind. One undo step.
+  int applyFill(const FillSpec& spec, int volume, QString name = {});
+
   // The raw edits the commands make. Each records what it changed for the
   // next `changed`; none pushes a command.
   void insertObject(SceneObject object, int index);
@@ -136,6 +156,28 @@ bool isSmoothBooleanOp(const std::string& op);
 // when it holds a `winding`, a TPMS source or a twist, bend or displace that no
 // `normalize` above re-normalises (E-10, DualC's `--list`).
 bool isMetricGraph(const dce::fieldgraph::GraphNode& graph);
+
+// Whether `kind` is one of DualC's TPMS tokens, or one of its strut tokens.
+bool isTpmsKind(const std::string& kind);
+bool isStrutKind(const std::string& kind);
+// The fill of a volume whose world box is `box`, with the defaults the fill
+// panels show: DualC's dualc_lattice wavelength (the box diagonal / 10, about
+// ten cells across) and centre (the box centre); a TPMS wall t of a fifth of
+// the wavelength (DualC's mesh_lattice sample, 0.1 at 0.5); a strut radius of
+// a tenth of it at both mid-span and nodes (DualC's builder default, 0.1 at
+// 1); no skin.
+FillSpec defaultFill(const std::string& kind, const dualc::BBox& box);
+// The fill's source, in world coordinates: onion(normalize(tpms)) with
+// `thickness`, or the strut lattice with its radii.
+dce::fieldgraph::GraphNode fillSource(const FillSpec& spec);
+// intersection(fillSource(spec), volume), the volume posed as operationGraph
+// poses an operand. With a skin, that in a union with the volume's inner skin,
+// onion(offset(volume, -skin / 2), skin / 2): the volume's inside within `skin`
+// of its surface, the part keeping its size. A volume that is not metric
+// (isMetricGraph, a winding) goes under `normalize` in the skin, which reads
+// distances. `edits` as operationGraph's.
+dce::fieldgraph::GraphNode fillGraph(const FillSpec& spec, const SceneObject& volume,
+                                     std::map<ParamKey, std::vector<float>>* edits = nullptr);
 
 // Two graphs equal node for node: op, params, inputs and pointers.
 bool sameGraph(const dce::fieldgraph::GraphNode& a, const dce::fieldgraph::GraphNode& b);

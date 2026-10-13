@@ -8,6 +8,7 @@
 #include <QUndoCommand>
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace fg = dce::fieldgraph;
@@ -386,6 +387,26 @@ int SceneDocument::applyOperation(const std::string& op,
   return id;
 }
 
+int SceneDocument::applyFill(const FillSpec& spec, int volume, QString name) {
+  const SceneObject* v = scene_.find(volume);
+  if (!v || (!isTpmsKind(spec.kind) && !isStrutKind(spec.kind))) return 0;
+  SceneObject r;
+  r.id = scene_.nextId();
+  r.name = name.isEmpty() ? QString("%1 fill %2").arg(QString::fromStdString(spec.kind)).arg(r.id)
+                          : name;
+  r.graph = fillGraph(spec, *v, &r.edits);
+  r.meshDir = v->meshDir;
+  r.operands = {volume};
+  r.colour = sceneColourFor(r.id);
+  const int id = r.id;
+  std::vector<int> hidden;
+  if (v->visible) hidden.push_back(volume);
+  const QString text = r.name;
+  push(new ApplyOperation(this, std::move(r), scene_.indexOf(volume) + 1, std::move(hidden),
+                          text));
+  return id;
+}
+
 void SceneDocument::insertObject(SceneObject object, int index) {
   scene_.insert(std::move(object), index);
   touchGraph();
@@ -548,6 +569,93 @@ fg::GraphNode operationGraph(const std::string& op,
     acc = std::move(node);
   }
   return acc;
+}
+
+bool isTpmsKind(const std::string& kind) {
+  for (const dce::TpmsKind& k : dce::tpmsKinds())
+    if (k.name == kind) return true;
+  return false;
+}
+
+bool isStrutKind(const std::string& kind) {
+  for (const dce::StrutKind& k : dce::strutKinds())
+    if (k.name == kind) return true;
+  return false;
+}
+
+FillSpec defaultFill(const std::string& kind, const dualc::BBox& box) {
+  // Three significant digits, so the panel shows the value the fill uses.
+  const auto round3 = [](double v) {
+    if (!(v > 0.0)) return v;
+    const double scale = std::pow(10.0, 2.0 - std::floor(std::log10(v)));
+    return std::round(v * scale) / scale;
+  };
+  FillSpec f;
+  f.kind = kind;
+  const dualc::Vector3 e = box.max - box.min;
+  const double diag = std::sqrt(e.x * e.x + e.y * e.y + e.z * e.z);
+  if (diag > 0.0 && std::isfinite(diag)) {
+    f.wavelength = round3(diag / 10.0);
+    f.center = (box.min + box.max) * 0.5;
+  }
+  f.thickness = round3(f.wavelength / 5.0);
+  f.radius = f.nodeRadius = round3(f.wavelength / 10.0);
+  return f;
+}
+
+fg::GraphNode fillSource(const FillSpec& spec) {
+  fg::ParamValue center;
+  center.kind = fg::ParamValue::Kind::Vector;
+  center.vec = {spec.center.x, spec.center.y, spec.center.z};
+  fg::GraphNode source;
+  source.op = spec.kind;
+  source.params["center"] = center;
+  source.params["wavelength"].num = spec.wavelength;
+  if (isStrutKind(spec.kind)) {
+    source.params["radius"].num = spec.radius;
+    source.params["nodeRadius"].num = spec.nodeRadius;
+    return source;
+  }
+  fg::GraphNode normalized;
+  normalized.op = "normalize";
+  normalized.in.push_back(std::move(source));
+  fg::GraphNode onion;
+  onion.op = "onion";
+  onion.params["thickness"].num = spec.thickness;
+  onion.in.push_back(std::move(normalized));
+  return onion;
+}
+
+fg::GraphNode fillGraph(const FillSpec& spec, const SceneObject& volume,
+                        std::map<ParamKey, std::vector<float>>* edits) {
+  // Built as operations over stand-in objects at the identity, so the volume
+  // is posed, and its edits re-keyed, the way operationGraph does it.
+  const auto standIn = [&volume](fg::GraphNode graph) {
+    SceneObject o;
+    o.graph = std::move(graph);
+    o.meshDir = volume.meshDir;
+    return o;
+  };
+  SceneObject source = standIn(fillSource(spec));
+  SceneObject clipped = standIn({});
+  clipped.graph = operationGraph("intersection", {}, {&source, &volume}, &clipped.edits);
+  if (!(spec.skin > 0.0)) {
+    if (edits) *edits = clipped.edits;
+    return clipped.graph;
+  }
+  // The skin reads distances: a winding volume goes under normalize first.
+  SceneObject metric = standIn({});
+  const bool wrap = !isMetricGraph(volume.graph);
+  if (wrap) metric.graph = operationGraph("normalize", {}, {&volume}, &metric.edits);
+  std::map<std::string, fg::ParamValue> shrink;
+  shrink["r"].num = -spec.skin / 2.0;
+  SceneObject inner = standIn({});
+  inner.graph = operationGraph("offset", shrink, {wrap ? &metric : &volume}, &inner.edits);
+  std::map<std::string, fg::ParamValue> half;
+  half["thickness"].num = spec.skin / 2.0;
+  SceneObject skin = standIn({});
+  skin.graph = operationGraph("onion", half, {&inner}, &skin.edits);
+  return operationGraph("union", {}, {&clipped, &skin}, edits);
 }
 
 bool sameGraph(const fg::GraphNode& a, const fg::GraphNode& b) {

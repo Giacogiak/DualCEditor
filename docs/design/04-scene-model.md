@@ -109,7 +109,20 @@ The new object's own transform is the identity.
   dock's selection in the order it was made (`ObjectsPanel::selectedIds`), and the menu's
   `k`. The result is selected when the scene that holds it commits.
 
-`tests/operations_test.cpp` checks every boolean against DualC: the result's graph, read
+- **Fills (P05 T2).** `fillGraph` builds `intersection(source, volume)`, the source
+  first: `onion(normalize(tpms))` or a strut lattice (`fillSource`), in world coordinates
+  at the identity, the volume posed as an operand. It is built as `operationGraph` calls
+  over stand-in objects, so the pointers stay structural and the volume's edits follow.
+  The optional skin is `union(that, onion(offset(volume, -s/2), s/2))`: an onion of the
+  volume shrunk by half the skin, which is the inside within `s` of the surface, so the
+  part keeps its size (an onion of the volume itself would straddle the surface and grow
+  the part by `s/2`). A volume that `isMetricGraph` rejects (a `winding`) goes under
+  `normalize` in the skin, which reads distances; the clip needs no wrap. `defaultFill`
+  gives the dialogs' defaults from the volume's world trace box (`MainWindow::worldBounds`):
+  a tenth of its diagonal for the wavelength, its centre, `t` a fifth and the radii a tenth
+  of the wavelength (DualC's `mesh_lattice.json` and strut builder ratios).
+
+`tests/operations_test.cpp` checks every boolean and fill against DualC: the result's graph, read
 back as `dualc_field` reads a graph (`dumpJson`, `parseJson`), has the same field at 216
 points as the graph written by hand in DualC's shorthand. Both are built by DualC's
 `FieldGraph`, so equal values mean the editor builds the graph a user would give
