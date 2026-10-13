@@ -58,6 +58,11 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // A parameter edit: upload one binding of the scene on screen to its
   // uniform. No compile, no link.
   void setParameter(const dce::fieldgraph::UniformBinding& b);
+  // The trace box of the scene on screen, until the next setScene: a move
+  // sets it (uBoundsMin, uBoundsMax), with no compile. The march constants
+  // that derive from it follow at the next render.
+  void setBounds(const dualc::BBox& bounds) { bounds_ = bounds; }
+  const dualc::BBox& bounds() const { return bounds_; }
   // The selected object's id, 0 for none: kSelectedUniform, set at each
   // render (a lowered scene's shader has it; a single graph's ignores it).
   void setSelectedObject(int id) { selected_ = id; }

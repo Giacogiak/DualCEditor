@@ -72,6 +72,37 @@ using SetTransform = SetField<dualc::Mat4, &SceneObject::transform>;
 using SetVisible = SetField<bool, &SceneObject::visible>;
 using SetColour = SetField<SceneColour, &SceneObject::colour>;
 
+// A pose: the transform and the scale in one step (the gizmo, the
+// Transform dock).
+class SetPose : public QUndoCommand {
+ public:
+  SetPose(SceneDocument* doc, int id, const SceneObject& before, const dualc::Mat4& transform,
+          double scale, const QString& text)
+      : QUndoCommand(text),
+        doc_(doc),
+        id_(id),
+        before_{before.transform, before.scale},
+        after_{transform, scale} {}
+  void redo() override { set(after_); }
+  void undo() override { set(before_); }
+
+ private:
+  struct Pose {
+    dualc::Mat4 transform;
+    double scale;
+  };
+  void set(const Pose& p) {
+    if (SceneObject* o = doc_->object(id_)) {
+      o->transform = p.transform;
+      o->scale = p.scale;
+      doc_->touch(id_);
+    }
+  }
+  SceneDocument* doc_;
+  int id_;
+  Pose before_, after_;
+};
+
 class SetParameter : public QUndoCommand {
  public:
   SetParameter(SceneDocument* doc, int id, ParamKey key,
@@ -277,6 +308,15 @@ void SceneDocument::setTransform(int id, const dualc::Mat4& worldFromLocal) {
                         QString("Move %1").arg(o->name)));
 }
 
+void SceneDocument::setPose(int id, const dualc::Mat4& worldFromLocal, double scale,
+                            const QString& verb) {
+  const SceneObject* o = scene_.find(id);
+  if (!o || !(scale > 0.0) || (sameMatrix(o->transform, worldFromLocal) && o->scale == scale))
+    return;
+  push(new SetPose(this, id, *o, worldFromLocal, scale,
+                   QString("%1 %2").arg(verb.isEmpty() ? QString("Move") : verb, o->name)));
+}
+
 void SceneDocument::setVisible(int id, bool visible) {
   const SceneObject* o = scene_.find(id);
   if (!o || o->visible == visible) return;
@@ -396,10 +436,22 @@ fg::GraphNode operationGraph(const std::string& op,
     if (!oneDir && !o.meshDir.isEmpty()) absoluteMeshPaths(graph, o.meshDir);
     const std::string at = "/root/in/" + std::to_string(i);
     std::map<std::string, std::string> renamed;
-    if (isIdentity(o.transform)) {
-      assignPointers(graph, at, renamed);
-      root.in.push_back(std::move(graph));
-    } else {
+    // Outermost first: transform, then scale, each only when it moves something.
+    const bool moved = !isIdentity(o.transform), scaled = o.scale != 1.0;
+    std::string inner = at;
+    if (moved) inner += "/in/0";
+    const std::string scaleAt = inner;
+    if (scaled) inner += "/in/0";
+    assignPointers(graph, inner, renamed);
+    if (scaled) {
+      fg::GraphNode sn;
+      sn.op = "scale";
+      sn.params["s"].num = o.scale;
+      sn.in.push_back(std::move(graph));
+      sn.pointer = scaleAt;
+      graph = std::move(sn);
+    }
+    if (moved) {
       fg::GraphNode t;
       t.op = "transform";
       fg::ParamValue matrix;
@@ -407,11 +459,11 @@ fg::GraphNode operationGraph(const std::string& op,
       for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c) matrix.vec.push_back(o.transform.m[r][c]);
       t.params["matrix"] = std::move(matrix);
-      assignPointers(graph, at + "/in/0", renamed);
       t.in.push_back(std::move(graph));
       t.pointer = at;
-      root.in.push_back(std::move(t));
+      graph = std::move(t);
     }
+    root.in.push_back(std::move(graph));
     if (!edits) continue;
     for (const auto& [key, value] : o.edits) {
       const auto it = renamed.find(key.first);
@@ -441,6 +493,7 @@ bool sameScene(const Scene& a, const Scene& b) {
     if (x.id != y.id || x.name != y.name || !sameGraph(x.graph, y.graph) ||
         x.meshDir != y.meshDir || x.file != y.file || x.edits != y.edits ||
         x.operands != y.operands || !sameMatrix(x.transform, y.transform) ||
+        x.scale != y.scale ||
         x.visible != y.visible || x.colour != y.colour)
       return false;
   }

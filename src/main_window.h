@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gizmo.h"
 #include "pick.h"
 #include "scene.h"
 #include "scene_document.h"
@@ -24,6 +25,7 @@ class QLabel;
 class QPlainTextEdit;
 class ObjectsPanel;
 class ParameterPanel;
+class TransformPanel;
 class Viewport;
 
 // The editor window: the Viewport, File > Open, a status bar, and the Objects,
@@ -97,6 +99,7 @@ class MainWindow : public QMainWindow {
 
   Viewport* viewport() const { return viewport_; }
   ParameterPanel* parameters() const { return parameters_; }
+  TransformPanel* transformPanel() const { return transform_; }
   ObjectsPanel* objects() const { return objects_; }
   // The permanent status-bar text: compile and frame times.
   QString timingText() const;
@@ -165,6 +168,14 @@ class MainWindow : public QMainWindow {
   // document to the scene on screen and the one compiling, and push its
   // visible, colour, transform and box uniforms.
   void syncObject(int id);
+  // Push object `id`'s visible, colour, transform, scale and box uniforms
+  // from the scene on screen, and the trace box that follows them.
+  void pushUniforms(int id);
+  // The gizmo's drag: object `id` of the scene on screen at `pose`, as
+  // uniforms only; the document is untouched until the drag ends.
+  void previewPose(int id, const Pose& pose);
+  // The selected object's pose to the Transform dock and the gizmo.
+  void showPose();
   // The scene could not be shown: bring the document back to the scene on
   // screen (undo or redo to its index, or, after an open, a reset).
   void revertDocument(bool opened);
@@ -189,6 +200,7 @@ class MainWindow : public QMainWindow {
   Viewport* viewport_;
   QPlainTextEdit* log_;
   ParameterPanel* parameters_;
+  TransformPanel* transform_;
   ObjectsPanel* objects_;
   QAction* deleteAction_;
   QLabel* timing_;

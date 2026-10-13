@@ -1,6 +1,7 @@
 #pragma once
 
 #include "field_glsl.h"
+#include "gizmo.h"
 #include "orbit_camera.h"
 #include "trace_renderer.h"
 
@@ -70,6 +71,26 @@ class Viewport : public QOpenGLWidget {
   // An edit lasts until the next setScene, which brings its own values.
   void setParameter(int index, std::vector<float> value);
 
+  // Set the trace box of the scene on screen (scene().bounds, and the
+  // uBoundsMin/uBoundsMax uniforms): an object moved as uniforms stays inside
+  // it. No compile, no link; it lasts until the next scene.
+  void setTraceBounds(const dualc::BBox& bounds);
+
+  // The transform gizmo (docs/command_reference/01-viewport.md § Transform
+  // gizmo). The window names the object it acts on and that object's pose; id
+  // 0 for none. While a target is set, its axes are drawn at its origin.
+  void setGizmoTarget(int id, const Pose& pose);
+  int gizmoTarget() const { return gizmoId_; }
+  // A modal drag, as the keys start it: g moves, r rotates, s scales, with
+  // the mouse at `pos`. x, y, z constrain it to a world axis (the same key
+  // again frees it); a left click or Return ends it (gizmoFinished, committed),
+  // Escape or a right click cancels it. Mouse moves emit gizmoDragged.
+  void startGizmo(GizmoMode mode, QPointF pos);
+  void setGizmoAxis(int axis);
+  void moveGizmo(QPointF pos);
+  void endGizmo(bool commit);
+  const GizmoDrag* gizmoDrag() const { return gizmo_ ? &*gizmo_ : nullptr; }
+
   // Highlight object `id` of a lowered scene, 0 for none (kSelectedUniform).
   // It lasts across setScene and repaints at full resolution.
   void setSelectedObject(int id);
@@ -113,6 +134,10 @@ class Viewport : public QOpenGLWidget {
   // A left click (press and release with no drag) at `pos`, in widget pixels.
   // It moves nothing; the window picks the object under it.
   void clicked(QPointF pos);
+  // The gizmo's object `id` is at `pose` during a drag: a preview, as uniforms.
+  void gizmoDragged(int id, const Pose& pose);
+  // The `mode` drag ended: at `pose` when `committed`, else back at its start.
+  void gizmoFinished(int id, const Pose& pose, bool committed, GizmoMode mode);
   // `error` is the shader compile or link log.
   void sceneFailed(const QString& error);
 
@@ -145,6 +170,7 @@ class Viewport : public QOpenGLWidget {
   void buildDone(int ticket, GLuint program, dce::fieldgraph::GlslScene scene,
                  QString error, int compiles, int links, double ms);
   void stopCompiler();
+  void paintGizmo();
   bool moving() const { return drag_ != Drag::None || settle_.isActive(); }
 
   dce::fieldgraph::GlslScene scene_;  // the scene on screen, once hasScene_
@@ -172,6 +198,10 @@ class Viewport : public QOpenGLWidget {
   QPointF pressPos_;
   bool dragged_ = false;  // the held button moved past the drag distance
   int selected_ = 0;
+  int gizmoId_ = 0;
+  Pose gizmoPose_;
+  std::optional<GizmoDrag> gizmo_;
+  Pose gizmoAt_;  // the drag's pose now
   QTimer settle_;  // single-shot; running = inside the settle window
   QTimer gpuPoll_;  // runs while GPU timer queries are in flight
   struct TimedFrame {

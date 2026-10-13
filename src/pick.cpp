@@ -16,11 +16,13 @@ struct ScenePicker::Object {
   std::optional<fg::FieldGraph> graph;
   dualc::BBox box;  // the local trace box
   dualc::Mat4 localFromWorld = dualc::Mat4::identity();
+  double scale = 1.0;  // the object's uniform scale, inside localFromWorld
   bool visible = true;
   bool metric = true;
   double stepScale = 1.0, stepMin = 0.0, stepMax = 0.0;
 
-  // The first crossing along `ray`, in world units (the transform is rigid).
+  // The first crossing along `ray`, in the units of the graph's own frame:
+  // world units divided by `scale` (the transform is rigid).
   std::optional<double> hit(const PickRay& ray) const;
 };
 
@@ -50,6 +52,7 @@ ScenePicker::ScenePicker(const Scene& scene, const LoweredScene& lowered) {
     }
     o->box = lo.localBounds;
     o->localFromWorld = so->transform.inverseRigid();
+    o->scale = so->scale;
     o->visible = so->visible;
     // TraceRenderer's march constants, from the object's own box.
     const Vector3 e = o->box.extent();
@@ -77,18 +80,23 @@ void ScenePicker::setLocalFromWorld(int id, const dualc::Mat4& localFromWorld) {
   if (it != objects_.end()) it->second->localFromWorld = localFromWorld;
 }
 
+void ScenePicker::setScale(int id, double scale) {
+  const auto it = objects_.find(id);
+  if (it != objects_.end() && scale > 0.0) it->second->scale = scale;
+}
+
 PickHit ScenePicker::pick(const PickRay& ray) const {
   PickHit best;
   for (const auto& [id, o] : objects_) {
     if (!o->visible) continue;
     const std::optional<double> t = o->hit(ray);
-    if (t && *t < best.t) best = {id, *t};
+    if (t && *t * o->scale < best.t) best = {id, *t * o->scale};
   }
   return best;
 }
 
 std::optional<double> ScenePicker::Object::hit(const PickRay& world) const {
-  const Vector3 ro = localFromWorld.transformPoint(world.origin);
+  const Vector3 ro = localFromWorld.transformPoint(world.origin) * (1.0 / scale);
   const Vector3 rd = localFromWorld.transformDirection(world.dir);
   // The shader's intersectBox.
   double t0 = -std::numeric_limits<double>::infinity();

@@ -41,6 +41,9 @@ struct SceneObject {
   // worldFromLocal. Rigid only: DualC's `transform` node inverts it with
   // Mat4::inverseRigid.
   dualc::Mat4 transform = dualc::Mat4::identity();
+  // A uniform scale about the object's origin, applied before `transform`
+  // (DualC's `scale` node: s * f(p / s), still a distance). Positive.
+  double scale = 1.0;
   bool visible = true;
   SceneColour colour = kDualCBase;
 };
@@ -89,6 +92,7 @@ struct LoweredObject {
   int id = 0;
   int firstBinding = 0, endBinding = 0;  // all of the object's bindings
   int transformBinding = -1;  // mat4 localFromWorld, row-major (DualC's)
+  int scaleBinding = -1;      // float, the `scale` node's s
   int visibleBinding = -1;
   int colourBinding = -1;
   // The culling box (vec3 each): worldBounds as lowered. A move uploads
@@ -97,7 +101,7 @@ struct LoweredObject {
   // Whether sceneSDF and sceneColor test the box before the object
   // (isCostlyObject). The box bindings exist either way.
   bool culled = false;
-  dualc::BBox localBounds;  // the graph's padded trace box, before transform
+  dualc::BBox localBounds;  // the graph's padded trace box, before scale and transform
   dualc::BBox worldBounds;  // localBounds transformed, as an axis-aligned box
   // DualC's march constants of the object compiled alone (GlslScene's).
   float stepScale = 1.0f, featureScale = 0.0f;
@@ -112,8 +116,16 @@ struct LoweredScene {
   std::vector<LoweredObject> objects;  // in scene order
 };
 
-// The axis-aligned box around `local` moved by `worldFromLocal`.
-dualc::BBox worldBox(const dualc::BBox& local, const dualc::Mat4& worldFromLocal);
+// The axis-aligned box around `local` scaled by `scale` about the origin,
+// then moved by `worldFromLocal`.
+dualc::BBox worldBox(const dualc::BBox& local, const dualc::Mat4& worldFromLocal,
+                     double scale = 1.0);
+
+// The trace box of `scene` posed as it is now: the union of each lowered
+// object's localBounds, posed by its object in `scene` (hidden ones
+// included). A move sets it as the uBoundsMin/uBoundsMax uniforms, with no
+// compile (TraceRenderer::setBounds).
+dualc::BBox sceneTraceBounds(const Scene& scene, const LoweredScene& lowered);
 
 // The cost rule of the culling (P07 T1, docs/design/03-scene-lowering.md
 // § Culling): an object is costly, and culled, unless its graph has at most

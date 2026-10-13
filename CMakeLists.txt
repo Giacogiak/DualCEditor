@@ -57,6 +57,8 @@ endfunction()
 add_library(dualceditor_core STATIC
   src/bench.cpp
   src/bench.h
+  src/gizmo.cpp
+  src/gizmo.h
   src/graph_file.cpp
   src/graph_file.h
   src/graph_scene.cpp
@@ -81,6 +83,8 @@ add_library(dualceditor_core STATIC
   src/snapshot.h
   src/trace_renderer.cpp
   src/trace_renderer.h
+  src/transform_panel.cpp
+  src/transform_panel.h
   src/viewport.cpp
   src/viewport.h)
 target_include_directories(dualceditor_core PUBLIC src)

@@ -54,6 +54,7 @@ The file is written whole or not at all (`QSaveFile`).
 | `objects[].id` | The object's id, kept: its uniforms are named after it, and `operands` refer to it. |
 | `objects[].file` | The graph file the object was read from, **relative to the `.dcscene`'s folder** (`../src/a.fld`). Left out for an object with no file (an operation's), or when no relative name exists (another drive on Windows). A Qt resource keeps its `:/` name. |
 | `objects[].transform` | `worldFromLocal`, 16 numbers, row-major (`dualc::Mat4::m`). |
+| `objects[].scale` | The uniform scale under the transform (P03 T3), a positive number. Optional: absent reads 1. Anything else is refused. |
 | `objects[].colour` | Linear RGB, as `SceneColour`. |
 | `objects[].operands` | The ids an operation made the object from (`04-scene-model.md`). |
 | `objects[].edits` | The parameter edits: the binding's node pointer, its param key and the uniform's value. |

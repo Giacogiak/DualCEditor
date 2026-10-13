@@ -294,6 +294,7 @@ QString saveSceneFile(const Scene& scene, const QString& path) {
     for (int r = 0; r < 4; ++r)
       for (int c = 0; c < 4; ++c) m.append(o.transform.m[r][c]);
     j["transform"] = m;
+    j["scale"] = o.scale;
     QJsonArray operands;
     for (int id : o.operands) operands.append(id);
     j["operands"] = operands;
@@ -413,6 +414,12 @@ SceneLoad loadSceneFile(const QString& path) {
     }
     for (int r = 0; r < 4; ++r)
       for (int c = 0; c < 4; ++c) o.transform.m[r][c] = m[r * 4 + c].toDouble();
+    // Optional: a file written before the gizmo has no scale.
+    o.scale = j["scale"].toDouble(1.0);
+    if (!(o.scale > 0.0)) {
+      out.error = where + ": scale is not a positive number";
+      return out;
+    }
     for (const QJsonValue id : j["operands"].toArray()) o.operands.push_back(id.toInt());
     for (const QJsonValue e : j["edits"].toArray()) {
       const QJsonObject edit = e.toObject();

@@ -24,13 +24,13 @@ constexpr const char* kSceneColorDecl = "vec3 sceneColor(vec3 p)";
 
 }  // namespace
 
-BBox worldBox(const BBox& b, const dualc::Mat4& m) {
+BBox worldBox(const BBox& b, const dualc::Mat4& m, double scale) {
   const double inf = std::numeric_limits<double>::infinity();
   BBox out{{inf, inf, inf}, {-inf, -inf, -inf}};
   for (int i = 0; i < 8; ++i) {
     const Vector3 c{(i & 1) ? b.max.x : b.min.x, (i & 2) ? b.max.y : b.min.y,
                     (i & 4) ? b.max.z : b.min.z};
-    const Vector3 w = m.transformPoint(c);
+    const Vector3 w = m.transformPoint(c * scale);
     out.min = {std::min(out.min.x, w.x), std::min(out.min.y, w.y), std::min(out.min.z, w.z)};
     out.max = {std::max(out.max.x, w.x), std::max(out.max.y, w.y), std::max(out.max.z, w.z)};
   }
@@ -73,8 +73,15 @@ fg::GraphNode wrapInTransform(const SceneObject& o) {
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j) matrix.vec.push_back(o.transform.m[i][j]);
   t.params["matrix"] = std::move(matrix);
-  t.in.push_back(o.graph);
-  t.pointer = "/objects/" + std::to_string(o.id);
+  // The scale node is always there, so a scale edit is a uniform. It shares
+  // the wrapper's pointer: its binding is the float one.
+  fg::GraphNode s;
+  s.op = "scale";
+  s.params["s"].num = o.scale;
+  s.in.push_back(o.graph);
+  s.pointer = "/objects/" + std::to_string(o.id);
+  t.in.push_back(std::move(s));
+  t.pointer = t.in[0].pointer;
   return t;
 }
 
@@ -147,6 +154,19 @@ std::string objectUniformName(int id, const char* key) {
   return "u_o" + std::to_string(id) + "_" + key;
 }
 
+BBox sceneTraceBounds(const Scene& scene, const LoweredScene& lowered) {
+  BBox out = lowered.scene.bounds;
+  bool first = true;
+  for (const LoweredObject& lo : lowered.objects) {
+    const SceneObject* o = scene.find(lo.id);
+    if (!o) continue;
+    const BBox w = worldBox(lo.localBounds, o->transform, o->scale);
+    out = first ? w : unite(out, w);
+    first = false;
+  }
+  return out;
+}
+
 bool isCostlyObject(const fg::GraphNode& graph) {
   // Analytic primitives, sharp booleans and rigid placement: each costs about
   // what the box test would, so testing the box first does not pay.
@@ -194,7 +214,7 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
                                "): " + e.what(),
                            e.pointer());
     }
-    lo.worldBounds = worldBox(lo.localBounds, o.transform);
+    lo.worldBounds = worldBox(lo.localBounds, o.transform, o.scale);
     lo.stepScale = part.stepScale;
     lo.featureScale = part.featureScale;
     s.bounds = first ? lo.worldBounds : unite(s.bounds, lo.worldBounds);
@@ -240,6 +260,8 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
       // The wrapper's matrix: the one binding of the node we made.
       if (b.nodePointer == pointer && b.glslType == "mat4")
         lo.transformBinding = int(s.bindings.size());
+      if (b.nodePointer == pointer && b.glslType == "float" && b.paramKey == "s")
+        lo.scaleBinding = int(s.bindings.size());
       s.bindings.push_back(std::move(b));
     }
     lo.visibleBinding = int(s.bindings.size());

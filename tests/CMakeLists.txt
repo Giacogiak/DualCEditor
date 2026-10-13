@@ -87,6 +87,14 @@ target_link_libraries(scene_history_test PRIVATE dualceditor_core)
 dualceditor_target_options(scene_history_test)
 add_test(NAME scene_history COMMAND scene_history_test)
 
+# The transform gizmo without GL (P03 T3): pose values, a move, a rotation
+# and a scale drag, a pose as one undo step, and the trace and culling boxes
+# following a move.
+add_executable(gizmo_test gizmo_test.cpp)
+target_link_libraries(gizmo_test PRIVATE dualceditor_core)
+dualceditor_target_options(gizmo_test)
+add_test(NAME gizmo COMMAND gizmo_test)
+
 # A lowered scene on GL, off-screen: one object renders the graph's own image,
 # three objects render in their own colours, and hiding, showing and
 # recolouring compile and link nothing.

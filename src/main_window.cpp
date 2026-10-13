@@ -5,6 +5,7 @@
 #include "objects_panel.h"
 #include "parameter_panel.h"
 #include "scene_file.h"
+#include "transform_panel.h"
 #include "viewport.h"
 
 #include <QAction>
@@ -93,7 +94,28 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   paramDock->setObjectName("parameters");
   paramDock->setWidget(parameters_);
   addDockWidget(Qt::RightDockWidgetArea, paramDock);
-  resizeDocks({objectsDock, paramDock}, {fontMetrics().lineSpacing() * 8, height()},
+  transform_ = new TransformPanel(this);
+  auto* transformDock = new QDockWidget("Transform", this);
+  transformDock->setObjectName("transform");
+  transformDock->setWidget(transform_);
+  addDockWidget(Qt::RightDockWidgetArea, transformDock);
+  splitDockWidget(objectsDock, transformDock, Qt::Vertical);
+  connect(transform_, &TransformPanel::poseEdited, this, [this](const Pose& pose) {
+    document_.setPose(selected_, pose.transform, pose.scale, "Transform");
+  });
+  // The gizmo previews as uniforms; its end is one undo step.
+  connect(viewport_, &Viewport::gizmoDragged, this, &MainWindow::previewPose);
+  connect(viewport_, &Viewport::gizmoFinished, this,
+          [this](int id, const Pose& pose, bool committed, GizmoMode mode) {
+            const QString verb = mode == GizmoMode::Rotate  ? "Rotate"
+                                 : mode == GizmoMode::Scale ? "Scale"
+                                                            : "Move";
+            if (committed) document_.setPose(id, pose.transform, pose.scale, verb);
+            syncObject(id);
+            showPose();
+          });
+  resizeDocks({objectsDock, transformDock, paramDock},
+              {fontMetrics().lineSpacing() * 8, fontMetrics().lineSpacing() * 6, height()},
               Qt::Vertical);
   resizeDocks({paramDock}, {fontMetrics().averageCharWidth() * 34}, Qt::Horizontal);
   // An edit sets one uniform: no recompile, no relink.
@@ -133,6 +155,7 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   deleteAction_->setEnabled(false);
   QMenu* viewMenu = menuBar()->addMenu("&View");
   viewMenu->addAction(objectsDock->toggleViewAction());
+  viewMenu->addAction(transformDock->toggleViewAction());
   viewMenu->addAction(paramDock->toggleViewAction());
   viewMenu->addAction(dock->toggleViewAction());
 
@@ -309,23 +332,31 @@ void MainWindow::syncObject(int id) {
     o->visible = from->visible;
     o->colour = from->colour;
     o->transform = from->transform;
+    o->scale = from->scale;
     o->edits = from->edits;
   }
   if (QListWidgetItem* row = objects_->row(id); row && row->text() != from->name)
     showObjects();
   objects_->setObjectVisible(id, from->visible);
   objects_->setObjectColour(id, from->colour);
+  pushUniforms(id);
+  if (id == selected_) showPose();
+}
+
+void MainWindow::pushUniforms(int id) {
+  const SceneObject* from = doc_.scene.find(id);
   const LoweredObject* lo = loweredObject(lowered_, id);
-  if (!lo || !viewport_->hasScene()) return;
+  if (!from || !lo || !viewport_->hasScene()) return;
   const dualc::Mat4 localFromWorld = from->transform.inverseRigid();
   std::vector<float> matrix;
   for (int i = 0; i < 4; ++i)
     for (int j = 0; j < 4; ++j) matrix.push_back(float(localFromWorld.m[i][j]));
-  const dualc::BBox w = worldBox(lo->localBounds, from->transform);
+  const dualc::BBox w = worldBox(lo->localBounds, from->transform, from->scale);
   const std::pair<int, std::vector<float>> values[] = {
       {lo->visibleBinding, {from->visible ? 1.0f : 0.0f}},
       {lo->colourBinding, {from->colour[0], from->colour[1], from->colour[2]}},
       {lo->transformBinding, matrix},
+      {lo->scaleBinding, {float(from->scale)}},
       {lo->boxMinBinding, {float(w.min.x), float(w.min.y), float(w.min.z)}},
       {lo->boxMaxBinding, {float(w.max.x), float(w.max.y), float(w.max.z)}}};
   const std::vector<fg::UniformBinding>& bindings = viewport_->scene().bindings;
@@ -336,6 +367,12 @@ void MainWindow::syncObject(int id) {
     viewport_->setParameter(index, value);
     parameters_->showValue(index, value);
   }
+  // The trace box follows: every object's box as posed now, as uniforms.
+  const dualc::BBox box = sceneTraceBounds(doc_.scene, lowered_);
+  const dualc::BBox& now = viewport_->scene().bounds;
+  if (box.min.x != now.min.x || box.min.y != now.min.y || box.min.z != now.min.z ||
+      box.max.x != now.max.x || box.max.y != now.max.y || box.max.z != now.max.z)
+    viewport_->setTraceBounds(box);
 }
 
 void MainWindow::revertDocument(bool opened) {
@@ -356,9 +393,25 @@ void MainWindow::selectObject(int id) {
   deleteAction_->setEnabled(id != 0);
   renameAction_->setEnabled(id != 0);
   viewport_->setSelectedObject(id);
-  if (id == selected_) return;
+  const bool moved = id != selected_;
   selected_ = id;
-  emit selectionChanged(id);
+  showPose();
+  if (moved) emit selectionChanged(id);
+}
+
+void MainWindow::showPose() {
+  const SceneObject* o = document_.scene().find(selected_);
+  const Pose pose = o ? Pose{o->transform, o->scale} : Pose{};
+  transform_->setPose(o ? o->name : QString(), pose);
+  viewport_->setGizmoTarget(o && doc_.scene.find(selected_) ? selected_ : 0, pose);
+}
+
+void MainWindow::previewPose(int id, const Pose& pose) {
+  SceneObject* o = doc_.scene.find(id);
+  if (!o) return;
+  o->transform = pose.transform;
+  o->scale = pose.scale;
+  pushUniforms(id);
 }
 
 int MainWindow::pickAt(QPointF pos) {
@@ -387,6 +440,9 @@ int MainWindow::pickAt(QPointF pos) {
     for (int i = 0; i < 4; ++i)
       for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = m[std::size_t(i * 4 + j)];
     picker_->setLocalFromWorld(lo.id, localFromWorld);
+    if (lo.scaleBinding >= 0 && lo.scaleBinding < int(values.size()) &&
+        values[std::size_t(lo.scaleBinding)].value.size() == 1)
+      picker_->setScale(lo.id, values[std::size_t(lo.scaleBinding)].value[0]);
   }
   const PickHit hit = picker_->pick(
       viewRay(viewport_->camera(), pos.x(), pos.y(), viewport_->width(), viewport_->height()));
@@ -594,6 +650,11 @@ void MainWindow::parameterEdited(int index, std::vector<float> value) {
       for (int i = 0; i < 4; ++i)
         for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = value[std::size_t(i * 4 + j)];
       document_.setTransform(lo.id, localFromWorld.inverseRigid());
+    } else if (index == lo.scaleBinding && value.size() == 1) {
+      if (const SceneObject* o = document_.scene().find(lo.id); o && value[0] > 0.0f)
+        document_.setPose(lo.id, o->transform, double(value[0]), "Scale");
+      else
+        syncObject(lo.id);
     } else if (index == lo.visibleBinding && value.size() == 1) {
       document_.setVisible(lo.id, value[0] > 0.5f);
     } else if (index == lo.colourBinding && value.size() == 3) {

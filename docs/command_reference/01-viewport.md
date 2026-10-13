@@ -163,9 +163,10 @@ the pointer is a character offset.
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
-| `View` menu | `Objects`, `Parameters` and `Log`: show or hide each dock. |
+| `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
-| Objects dock | On the right, above Parameters. One row per object. See *Objects* below. |
+| Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
+| Transform dock | On the right, between Objects and Parameters. The selected object's position, rotation and scale, typed in millimetres and degrees. See *Transform* below. |
 | Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. While a scene compiles it reads `compile …`. See *Timing* and *While a scene compiles* below. |
 | Parameters dock | On the right. One editor per parameter of the scene on screen. See *Parameters* below. |
 | Log dock | At the bottom, five lines high, read-only. One line per load (with its shader compile ms), reload and error. |
@@ -271,6 +272,47 @@ the keys (`F`).
 The query is read a few milliseconds after the frame, without stalling. While idle, nothing
 is measured and the values stay.
 
+## Transform
+
+The selected object is moved, rotated and scaled from the viewport (the gizmo) or from the
+Transform dock. Lengths are millimetres, the unit DualC's graphs are written in
+(`"units": "mm"`). A pose is the object's rigid transform and one uniform scale factor about
+its origin. Neither the gizmo nor the dock compiles anything: the object's matrix, scale,
+culling box and the scene's trace box (`uBoundsMin`, `uBoundsMax`) are uniforms. The pose is
+saved in the `.dcscene` (`transform`, `scale`).
+
+### Gizmo
+
+With an object selected, the viewport draws its world axes at its origin: x red, y green,
+z blue. The keys start a modal drag from where the cursor is:
+
+| Key | Drag |
+|---|---|
+| `G` | Move. Free: the origin follows the cursor in the plane facing the camera. |
+| `R` | Rotate about the view direction, by the angle the cursor sweeps around the origin. |
+| `S` | Scale, uniform: the factor is the ratio of the cursor's distance to the origin now to its distance at the start. |
+| `X`, `Y`, `Z` (during a drag) | Constrain the move or the rotation to that world axis, drawn across the view. The same key again frees it. A scale has no axis. |
+| Left click, `Return`, `Enter` | Apply: one undo step, `Move <name>`, `Rotate <name>` or `Scale <name>`. |
+| `Esc`, right click | Cancel: the object goes back to where it was. |
+
+During a drag the bottom-left of the viewport reads the change (`Move x: 12.50 mm`,
+`Rotate z: 90.0°`, `Scale: 1.250`). The camera does not move during a drag. Keys are matched
+by the character they type, so `G`, `R`, `S`, `X`, `Y` and `Z` are the keys labelled so on any
+layout, Belgian AZERTY included. `Ctrl+S` is still Save Scene: it types no `s`.
+
+### Transform dock
+
+| Row | Boxes | Unit, range |
+|---|---|---|
+| Position | x, y, z | mm, 3 decimals, ±1e6 |
+| Rotation | x, y, z | degrees, 2 decimals, −360 to 360, wrapping. The rotation is Rz · Ry · Rx about the world axes. |
+| Scale | factor | 4 decimals, 1e-4 to 1e4, step 0.1 |
+
+A value is taken on `Return`, when the box loses focus, or at each step of its arrows, and is
+one undo step, `Transform <name>`. A component that was not typed keeps its exact value, so
+typing x does not round y, z or the rotation. The boxes are greyed out with nothing selected.
+The Parameters dock's `matrix` and `s` rows of the object edit the same pose.
+
 ## Mouse and keys
 
 The same semantics as DualC's viewers (`OrbitState` in `examples/raymarch_gl`), plus pan.
@@ -281,6 +323,7 @@ The same semantics as DualC's viewers (`OrbitState` in `examples/raymarch_gl`), 
 | Left click (press and release within the drag distance, no Shift) | Select the object under the cursor, or clear the selection on the background (§ Objects). The view does not move. |
 | Wheel | Dolly. Distance × 0.9 per notch away from you (closer), ÷ 0.9 per notch toward you. Floor 1e-4. |
 | Middle-drag, or Shift + left-drag | Pan (from the same drag distance). The target slides in the view plane, and the point at the target follows the cursor. Yaw, pitch and distance are kept. |
+| `G`, `R`, `S`, `X`, `Y`, `Z`, `Esc` | The transform gizmo, with an object selected (§ Transform). |
 | `F` (either case) | Frame the bounds (does nothing while no graph is on screen). The target goes to the trace box centre and the distance to 1.3 × its diagonal. Yaw and pitch are kept. |
 
 Keys are matched by the character they type (`QKeyEvent::text()`), not by key position.

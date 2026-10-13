@@ -56,6 +56,10 @@ class SceneDocument : public QObject {
   void removeObject(int id);
   void renameObject(int id, QString name);
   void setTransform(int id, const dualc::Mat4& worldFromLocal);
+  // Set the transform and the scale of object `id` as one step, named
+  // "<verb> <name>" (Move by default). A scale that is not positive is refused.
+  void setPose(int id, const dualc::Mat4& worldFromLocal, double scale,
+               const QString& verb = {});
   void setVisible(int id, bool visible);
   void setColour(int id, const SceneColour& colour);
   // Edit the uniform `key` of object `id` to `value`. `current` is the value
@@ -105,7 +109,8 @@ class SceneDocument : public QObject {
 
 // The graph of an operation over `operands` (scene objects): `op` with
 // `params`, whose inputs are each operand's graph wrapped in DualC's
-// `transform` node (none for an identity). Every node gets a structural
+// `transform` node (none for an identity) over DualC's `scale` node (none for
+// a scale of 1). Every node gets a structural
 // pointer ("/root", "/root/in/0", ...), and `edits`, when given, receives the
 // operands' parameter edits keyed by those pointers. A relative mesh path
 // becomes absolute when the operands resolve meshes in different folders.

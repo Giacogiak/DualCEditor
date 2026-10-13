@@ -43,6 +43,7 @@ class ScenePicker {
   // as uniforms. `localFromWorld` is DualC's (the transform binding).
   void setVisible(int id, bool visible);
   void setLocalFromWorld(int id, const dualc::Mat4& localFromWorld);
+  void setScale(int id, double scale);
 
   // The nearest visible object along `ray`. Each object is marched as the
   // trace shader marches the scene, in its own trace box: steps of

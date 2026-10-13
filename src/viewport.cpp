@@ -1,6 +1,7 @@
 #include "viewport.h"
 
 #include <QApplication>
+#include <QCursor>
 #include <QDebug>
 #include <QKeyEvent>
 #include <QLoggingCategory>
@@ -8,6 +9,7 @@
 #include <QOpenGLContext>
 #include <QOffscreenSurface>
 #include <QOpenGLFunctions>
+#include <QPainter>
 #include <QThread>
 #include <QWheelEvent>
 
@@ -128,6 +130,7 @@ void Viewport::paintGL() {
     timedFrames_.push_back({preview, traced});
     gpuPoll_.start();
   }
+  paintGizmo();
   if (timeFrames_) renderer_.finish();
   const double ms = clock.nsecsElapsed() * 1e-6;
   lastFramePreview_ = preview;
@@ -389,6 +392,12 @@ void Viewport::viewChanged() {
 }
 
 void Viewport::mousePressEvent(QMouseEvent* event) {
+  if (gizmo_) {
+    // A modal drag: left confirms, right cancels; neither orbits.
+    if (event->button() == Qt::LeftButton || event->button() == Qt::RightButton)
+      endGizmo(event->button() == Qt::LeftButton);
+    return;
+  }
   const bool shift = event->modifiers() & Qt::ShiftModifier;
   if (event->button() == Qt::LeftButton)
     drag_ = shift ? Drag::Pan : Drag::Orbit;
@@ -404,6 +413,7 @@ void Viewport::mousePressEvent(QMouseEvent* event) {
 }
 
 void Viewport::mouseMoveEvent(QMouseEvent* event) {
+  if (gizmo_) return moveGizmo(event->position());
   if (drag_ == Drag::None) return QOpenGLWidget::mouseMoveEvent(event);
   // A click may shake by a pixel or two: the drag starts past the platform's
   // drag distance, so a click does not turn the view.
@@ -446,12 +456,114 @@ void Viewport::wheelEvent(QWheelEvent* event) {
 void Viewport::keyPressEvent(QKeyEvent* event) {
   // Keys are matched by the character they type, never by key position, so
   // they follow the user's layout (the owner types on Belgian AZERTY).
+  const QString key = event->text().toLower();
+  if (gizmo_) {
+    if (key == "x" || key == "y" || key == "z") {
+      setGizmoAxis(key == "x" ? 0 : key == "y" ? 1 : 2);
+      return;
+    }
+    if (event->key() == Qt::Key_Escape) return endGizmo(false);
+    if (event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) return endGizmo(true);
+    return;
+  }
+  if (gizmoId_ != 0 && hasScene_ && (key == "g" || key == "r" || key == "s")) {
+    const GizmoMode mode = key == "g"   ? GizmoMode::Move
+                           : key == "r" ? GizmoMode::Rotate
+                                        : GizmoMode::Scale;
+    startGizmo(mode, mapFromGlobal(QCursor::pos()));
+    return;
+  }
   if (event->text().compare("f", Qt::CaseInsensitive) == 0 && hasScene_) {
     frameBounds(camera_, scene_.bounds);
     viewChanged();
     return;
   }
   QOpenGLWidget::keyPressEvent(event);
+}
+
+void Viewport::setTraceBounds(const dualc::BBox& bounds) {
+  if (!hasScene_) return;
+  scene_.bounds = bounds;
+  renderer_.setBounds(bounds);
+  update();
+}
+
+void Viewport::setGizmoTarget(int id, const Pose& pose) {
+  if (gizmo_ && id != gizmoId_) endGizmo(false);
+  if (gizmo_) return;  // the drag's own preview: its start stays
+  gizmoId_ = id;
+  gizmoPose_ = pose;
+  update();
+}
+
+void Viewport::startGizmo(GizmoMode mode, QPointF pos) {
+  if (gizmoId_ == 0 || mode == GizmoMode::None) return;
+  if (gizmo_) endGizmo(false);
+  drag_ = Drag::None;
+  gizmo_.emplace(mode, gizmoPose_, camera_, QSizeF(size()), pos);
+  gizmoAt_ = gizmoPose_;
+  setMouseTracking(true);
+  update();
+}
+
+void Viewport::setGizmoAxis(int axis) {
+  if (!gizmo_) return;
+  gizmo_->setAxis(gizmo_->axis() == axis ? -1 : axis);
+  moveGizmo(mapFromGlobal(QCursor::pos()));
+}
+
+void Viewport::moveGizmo(QPointF pos) {
+  if (!gizmo_) return;
+  gizmoAt_ = gizmo_->poseAt(pos);
+  emit gizmoDragged(gizmoId_, gizmoAt_);
+  viewChanged();
+}
+
+void Viewport::endGizmo(bool commit) {
+  if (!gizmo_) return;
+  const Pose at = commit ? gizmoAt_ : gizmo_->start();
+  const GizmoMode mode = gizmo_->mode();
+  gizmo_.reset();
+  setMouseTracking(false);
+  if (commit) gizmoPose_ = at;
+  emit gizmoFinished(gizmoId_, at, commit, mode);
+  viewChanged();
+}
+
+// The target's world axes at its origin (x red, y green, z blue), a fixed
+// share of the view tall; during a drag along an axis, that axis across the
+// view, and the drag's status line.
+void Viewport::paintGizmo() {
+  if (gizmoId_ == 0 || !hasScene_) return;
+  const Pose& pose = gizmo_ ? gizmoAt_ : gizmoPose_;
+  const dualc::Vector3 o{pose.transform.m[0][3], pose.transform.m[1][3], pose.transform.m[2][3]};
+  const double w = width(), h = height();
+  const std::optional<QPointF> c = projectPoint(camera_, o, w, h);
+  if (!c) return;
+  const CameraFrame f = cameraFrame(camera_);
+  const dualc::Vector3 d = o - f.pos;
+  const double depth = d.x * f.forward.x + d.y * f.forward.y + d.z * f.forward.z;
+  const double len = 0.12 * 2.0 * depth * kTanHalfFov;  // 12% of the view height
+  static const QColor kAxis[3] = {QColor(230, 70, 60), QColor(90, 200, 80), QColor(70, 130, 240)};
+  QPainter p(this);
+  p.setRenderHint(QPainter::Antialiasing);
+  for (int k = 0; k < 3; ++k) {
+    const bool along = gizmo_ && gizmo_->axis() == k;
+    const double reach = along ? len * 1000.0 : len;
+    const dualc::Vector3 a{k == 0 ? reach : 0.0, k == 1 ? reach : 0.0, k == 2 ? reach : 0.0};
+    const std::optional<QPointF> e = projectPoint(camera_, o + a, w, h);
+    const std::optional<QPointF> b = along ? projectPoint(camera_, o - a, w, h) : c;
+    if (!e || !b) continue;
+    p.setPen(QPen(kAxis[k], along ? 1.5 : 2.5));
+    p.drawLine(*b, *e);
+  }
+  p.setPen(QPen(Qt::white, 1.5));
+  p.drawEllipse(*c, 4.0, 4.0);
+  if (gizmo_) {
+    p.setPen(Qt::white);
+    p.drawText(QPointF(10, h - 10), gizmo_->describe(gizmoAt_) +
+                                        "   (x/y/z axis, click or Return to apply, Esc to cancel)");
+  }
 }
 
 void Viewport::releaseGL() {

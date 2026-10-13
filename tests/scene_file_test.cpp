@@ -80,7 +80,12 @@ std::vector<double> samples(const Scene& scene, const LoweredScene& lowered) {
     for (int i = 0; i < 4; ++i)
       for (int j = 0; j < 4; ++j) m.vec.push_back(o.transform.m[i][j]);
     t.params["matrix"] = m;
-    t.in.push_back(o.graph);
+    // The scale under the transform, as lowerScene wraps it (P03 T3).
+    fg::GraphNode sn;
+    sn.op = "scale";
+    sn.params["s"].num = o.scale;
+    sn.in.push_back(o.graph);
+    t.in.push_back(sn);
     GraphDirMeshResolver meshes(o.meshDir);
     const fg::FieldGraph field = fg::FieldGraph::build(t, meshes);
     const dualc::BBox& b = lowered.objects[k].worldBounds;
@@ -132,6 +137,7 @@ bool sameObjects(const Scene& a, const Scene& b) {
     if (x.id != y.id || x.name != y.name || x.visible != y.visible || x.colour != y.colour ||
         x.edits != y.edits || x.operands != y.operands ||
         std::memcmp(x.transform.m, y.transform.m, sizeof(x.transform.m)) != 0 ||
+        x.scale != y.scale ||
         !sameGraph(withoutMeshPaths(x.graph), withoutMeshPaths(y.graph)))
       return false;
   }
@@ -173,7 +179,8 @@ int main(int argc, char** argv) {
   doc.renameObject(gyroid, "lattice");
   doc.setTransform(gyroid, dualc::Mat4::translation({2.5, 0.0, 0.0}) *
                                dualc::Mat4::rotation({0.0, 0.0, 1.0}, 0.3));
-  doc.setTransform(ball, dualc::Mat4::translation({0.0, 1.0, 0.0}));
+  // A pose set as the gizmo sets it: moved and scaled (P03 T3).
+  doc.setPose(ball, dualc::Mat4::translation({0.0, 1.0, 0.0}), 1.5, "Scale");
   doc.setColour(mesh, {0.1f, 0.2f, 0.3f});
   // A parameter edit of the gyroid: a binding that is not the object's own.
   {

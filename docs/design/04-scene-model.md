@@ -26,7 +26,8 @@ without a context (`tests/scene_history_test.cpp`).
 | Add an object (File ▸ Add, a drop, a command-line graph after the first) | `AddObject`: the object, its id and its place | yes |
 | Remove an object | `RemoveObject`: keeps the whole object and its place; undo puts it back with its id | yes |
 | Rename | `SetField<name>` | no |
-| Move (the `matrix` binding today, P03 T3's gizmo next) | `SetField<transform>`: `worldFromLocal` | no: the transform and box uniforms |
+| Move (the `matrix` binding) | `SetField<transform>`: `worldFromLocal` | no: the transform and box uniforms |
+| Move, rotate, scale (the gizmo, the Transform dock, the `s` binding; P03 T3) | `SetPose`: `transform` and `scale` in one step, named `<verb> <name>` | no: the transform, scale, culling box and trace box uniforms (`06-transform-gizmo.md`) |
 | Show or hide | `SetField<visible>` | no: one uniform |
 | Recolour | `SetField<colour>` | no: one uniform |
 | Parameter edit | `SetParameter`: the edit before (or none) and the uniform's value before; consecutive edits of one parameter merge into one step | no: one uniform |

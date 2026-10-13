@@ -205,8 +205,17 @@ both stay put across three hides, three shows and a recolour.
 
 The transform binding holds DualC's `localFromWorld`, row-major
 (`worldFromLocal.inverseRigid()`), not the object's `transform`. A move written as a
-uniform edit must upload the inverse, and the object's culling box (§ Culling). The trace
-box stays as lowered until the next `lowerScene`, so a moved object can leave it.
+uniform edit must upload the inverse, and the object's culling box (§ Culling). Under the
+`transform` node every object has DualC's `scale` node, sharing its pointer, so a scale is
+the uniform `s` too (`LoweredObject::scaleBinding`; P03 T3). The culling box is
+`worldBox(localBounds, transform, scale)`.
+
+The trace box follows a move too (P03 T3): `MainWindow::pushUniforms` sets
+`sceneTraceBounds(scene on screen, lowered)`, the union of every object's box as posed now,
+through `Viewport::setTraceBounds`, which `TraceRenderer` uploads as `uBoundsMin` and
+`uBoundsMax` at the next frame. The march's step bounds derive from that box and follow it.
+`featureScale` does not: it stays as lowered until the next compile (§ Open in
+`../../HANDOFF_P03_TASK3.md`).
 
 ## Where it is used
 

@@ -14,10 +14,13 @@
 
 #include "main_window.h"
 #include "objects_panel.h"
+#include "transform_panel.h"
 #include "viewport.h"
 
 #include <QApplication>
 #include <QDir>
+#include <QDoubleSpinBox>
+#include <QKeyEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QElapsedTimer>
@@ -33,7 +36,9 @@
 #include <QUrl>
 #include <QWindow>
 
+#include <cmath>
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 
 namespace {
@@ -354,6 +359,87 @@ int main(int argc, char* argv[]) {
     // Not the image: across a relink, this box's NV92 driver draws the same
     // shader and uniforms differently (HANDOFF_P03_TASK1.md).
     check(sameValues, "undo of a remove: the same uniforms and values");
+  }
+
+  // The transform gizmo (P03 T3): a drag from the viewport and a value typed
+  // in the Transform dock are each one undo step and uniforms only, and a
+  // moved object is drawn whole: the trace box follows it, with no compile.
+  {
+    w.openFile(json);
+    check(runUntil([&] { return w.scene().objects().size() == 1 && !vp.building(); }, 30000),
+          "gizmo: one object on screen");
+    quiet(vp);
+    const int id = w.scene().objects().front().id;
+    w.selectObject(id);
+    check(vp.gizmoTarget() == id, "gizmo: the selection is the gizmo's target");
+    const auto pressF = [&] {
+      QKeyEvent f(QEvent::KeyPress, Qt::Key_F, Qt::NoModifier, "f");
+      QApplication::sendEvent(&vp, &f);
+      quiet(vp);
+    };
+    // Pixels the object covers: those that change when it is hidden.
+    const auto covered = [&] {
+      const QImage shown = vp.grabFramebuffer();
+      w.setObjectVisible(id, false);
+      quiet(vp);
+      const QImage hidden = vp.grabFramebuffer();
+      w.undoStack()->undo();
+      quiet(vp);
+      long n = 0;
+      for (int y = 0; y < shown.height(); ++y)
+        for (int x = 0; x < shown.width(); ++x) n += shown.pixel(x, y) != hidden.pixel(x, y);
+      return n;
+    };
+    pressF();
+    const long before = covered();
+    const dualc::BBox box = vp.scene().bounds;
+    const int links = vp.linkCount(), compiles = vp.compileCount();
+    const int steps = w.undoStack()->index();
+    // A drag along x, as g then x then a click make it.
+    vp.startGizmo(GizmoMode::Move, QPointF(vp.width() / 2.0, vp.height() / 2.0));
+    vp.setGizmoAxis(0);
+    vp.moveGizmo(QPointF(vp.width() * 0.9, vp.height() / 2.0));
+    vp.endGizmo(true);
+    const SceneObject* o = w.document()->scene().find(id);
+    check(w.undoStack()->index() == steps + 1 && w.undoStack()->undoText().startsWith("Move"),
+          "gizmo: a drag is one Move step");
+    check(o->transform.m[0][3] > 0.0 && o->transform.m[1][3] == 0.0 && o->transform.m[2][3] == 0.0,
+          "gizmo: a drag along x moves in x only");
+    // Then far out of the old box, typed in the dock: 3 box widths in x, in
+    // whole mm (the box shows 3 decimals).
+    const double far = std::ceil(3.0 * (box.max.x - box.min.x));
+    w.transformPanel()->box(0)->setValue(far);
+    o = w.document()->scene().find(id);
+    check(o->transform.m[0][3] == far, "dock: the typed x is the pose's x, in mm");
+    check(w.undoStack()->index() == steps + 2, "dock: a typed value is one step");
+    quiet(vp);
+    check(vp.scene().bounds.min.x > box.max.x, "the trace box follows the move");
+    pressF();
+    const long after = covered();
+    check(after > 0 && std::abs(after - before) <= before / 50 + 4,
+          "the moved object is drawn whole: as many pixels as before, framed");
+    w.transformPanel()->box(6)->setValue(2.0);
+    quiet(vp);
+    check(w.document()->scene().find(id)->scale == 2.0, "dock: the scale is set");
+    check(vp.scene().bounds.max.x - vp.scene().bounds.min.x > 1.9 * (box.max.x - box.min.x),
+          "the trace box follows the scale");
+    check(vp.linkCount() == links && vp.compileCount() == compiles,
+          "a move and a scale compile and link nothing");
+    // A cancelled drag puts the pose back.
+    const dualc::Mat4 kept = w.document()->scene().find(id)->transform;
+    vp.startGizmo(GizmoMode::Rotate, QPointF(10, 10));
+    vp.moveGizmo(QPointF(200, 300));
+    vp.endGizmo(false);
+    check(w.undoStack()->index() == steps + 3 &&
+              std::memcmp(w.document()->scene().find(id)->transform.m, kept.m, sizeof kept.m) == 0,
+          "a cancelled drag leaves the pose and the history");
+    for (int i = 0; i < 3; ++i) w.undoStack()->undo();
+    quiet(vp);
+    check(w.document()->scene().find(id)->scale == 1.0 &&
+              w.document()->scene().find(id)->transform.m[0][3] == 0.0,
+          "undo puts the pose back");
+    check(vp.scene().bounds.min.x == box.min.x && vp.scene().bounds.max.x == box.max.x,
+          "and the trace box");
   }
 
   // A scene saved and opened again (P03 T2): the same objects, shader and
