@@ -283,6 +283,70 @@ does not measure cold compile**, and the claim "primitive compile back near 670 
 not checked. The cold figure is P07 T3's (`plan/35_P07_render_scaling.md`), after the GL
 driver's shader cache is cleared.
 
+### GTX 1050 Ti at b163141 (P07 T3, cold cache)
+
+On 2026-10-13, the owner ran the P07 T3 checklist below on the GTX at b163141. The build
+matched; it compiled the same C++ as 4b89008 (P07 T2's asynchronous compile, option C's
+culling). Conditions as above: Windows 10, driver 441.93 (GL 3.3.0), Qt 6.8.3, mains
+power, Release, no other editor window. `%LOCALAPPDATA%\NVIDIA\GLCache` (138 files,
+30.7 MB) was emptied right before the script. The 20 raw lines, labelled `P07.3`, are
+the last 20 of `02-measurements-p07.jsonl`.
+
+| Family | Preview scale | Per added object, settled GPU ms, b011b24 (no culling) | dd92129 (culling all) | 6f3a8bd (option C) | b163141 (option C, T2) |
+|---|---|---|---|---|---|
+| primitives (1, 3, 5, 10) | 1.0 | +0.28 | +0.40 | +0.29 | **+0.29** |
+| primitives (1, 3, 5, 10) | 0.35 | +0.34 | +0.40 | — | +0.34 |
+| stacked in depth (1, 3, 5, 10) | 1.0 | — | +0.18 | +0.12 | **+0.13** |
+| stacked in depth (1, 3, 5, 10) | 0.35 | — | — | — | +0.11 |
+| TPMS-in-box (1, 3) | 1.0 | +2.49 | +1.90 | +1.94 | **+1.96** |
+| TPMS-in-box (1, 3) | 0.35 | +2.28 | +1.95 | +1.98 | +1.95 |
+
+Settled GPU ms at 1.0: 1 / 3 / 5 / 10 primitives 0.6 / 1.1 / 0.8 / 3.2; 1 / 10 stacked
+in depth 0.6 / 1.9; 1 / 3 TPMS-in-box 2.7 / 6.6. Wall times were noisy (10 primitives
+settled at 1.0: 3.2 GPU, 17.6 wall ms); read the GPU columns.
+
+Cold compile, each scene's first run (at 0.35), GUI thread (`--bench` uses the
+synchronous `setScene`):
+
+| Scene | b011b24 (P01.4) | b163141 (P07.3) |
+|---|---|---|
+| 1 primitive | 157 | 152 |
+| 3 primitives | 265 | 399 |
+| 5 primitives | 413 | 512 |
+| 10 primitives | 670 | **1137** |
+| 1 TPMS-in-box | 339 | 757 |
+| 3 TPMS-in-box | 1210 | **1897** |
+
+The stacked-in-depth compiles (4–36 ms) are not cold. Their shaders likely match the
+side-by-side primitive scenes' except for values, so the cache served them; this was not
+checked. The runs at 1.0 hit the cache of the run at 0.35 (6–25 ms).
+
+**Live window, cold** (the cache emptied again). `DualCEditor tpms_box_0.fld tpms_box_1.fld`
+was opened in the script's kept folder, and `tpms_box_2.fld` was dropped on it during a held
+orbit. The view kept turning while the status bar read `compile …`, and the owner's
+verdict was "all good". Then the status bar read `shader compile 2566.6 ms`, timed on the
+compile thread's shared context (compile and link only, as `--bench`'s `compileMs`).
+
+Findings (P07 T3):
+- **The planar primitive slope is P01.4's** (+0.29 against +0.28 ms): under option C,
+  primitives are not culled.
+- **The TPMS-in-box slope is down about a fifth** (+2.49 → +1.96 ms), the same as at
+  dd92129 and 6f3a8bd.
+- **The depth-stacked column is cheap**, at +0.13 ms per object.
+- **The window stays responsive** during a cold 2.6 s compile.
+- **Not explained: the cold compiles are longer than P01.4's.**
+  - Primitives: 10 primitives take 1137 ms against 670, although option C gives
+    primitives P01's shader.
+  - TPMS-in-box: 1 and 3 take 757 / 1897 ms against 339 / 1210. A culled object's SDF
+    sits behind a branch, which can explain part of this.
+  - The window's cold 3-TPMS compile, 2567 ms on the compile thread, is longer than the
+    bench's 1897 ms on the GUI thread. A slower link on a second context would fit
+    (`HANDOFF_P07_TASK2.md`). Both figures time the same span:
+    `TraceRenderer::linkProgram` starts its clock after the codegen and the shader
+    assembly, and stops it at the link status. So the gap is not the codegen. There is one
+    sample of each.
+  - This is open (`HANDOFF_P07_TASK3.md`), not a pass.
+
 ### How to measure (P07 T3 checklist)
 
 P07 T3 re-measures at T2's commit or later (4b89008 and after; the P07.3 commit changes

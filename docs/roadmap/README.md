@@ -2,24 +2,39 @@
 
 ## Current focus
 
-**Now: P07, render scaling (`../../plan/35_P07_render_scaling.md`).** Per-object
-bounding-box culling (E-23), asynchronous shader compile (E-21), then a GTX re-measurement.
-Added by P02 and run before P03, since neither waits on E-08.
-T1 is done: costly objects (TPMS, lattices, meshes, …) skip their SDF while `p` is farther
-from their world box than the nearest object, and cheap analytic objects are written as in
-P01 (`../design/03-scene-lowering.md` § Culling). The owner's GTX run of a first version,
-which culled every object, is in `02-measurements.md` § With per-object culling (P07 T1).
-T2 is done: a structural edit lowers, compiles and links on a compile thread, and the
-viewport draws the old image until the new program links (`../design/01-render-path.md`
-§ Asynchronous compile). The owner saw the window keep orbiting on the GTX at 4b89008.
-T3 waits on the owner's GTX run, cold shader cache, with `02-measurements.md` § How to
-measure (P07 T3 checklist).
+**Now: P03, scene model (`../../plan/40_P03_scene_model.md`), which waits on E-08, the scene file format
+(`../decisions/02-open.md`).** The plan-run driver stops there until the owner decides
+E-08.
+
+**Open from P07 (`../../HANDOFF_P07_TASK3.md`):** cold shader compiles are longer than
+P01.4's, and the reason is not known:
+- 10 primitives take 1137 ms against 670, although primitives keep P01's shader;
+- 3 TPMS-in-box take 1897 ms against 1210;
+- the window's compile thread takes 2567 ms for the same scene.
+
+The window stays responsive through them.
 
 **Known failure, its own item (owner, 2026-10-13):** on the GTX 1050 Ti, `main_window`
 fails one check, "the .fld renders a different image" (`tests/main_window_test.cpp:220`),
 at 8b9baf8 and at P07.1, so before P07. It passes on the development box. To be
-investigated with the GTX in the loop. Until then the GTX ctest is 11/12. It does not
-block P07.
+investigated with the GTX in the loop. Until then the GTX ctest is one short (12/13 at 4b89008). It does not
+block P07, and is still open after it.
+
+Done: P07, render scaling (`../../plan/35_P07_render_scaling.md`), added by P02 and run
+before P03.
+- T1: costly objects (TPMS, lattices, meshes, …) skip their SDF while `p` is farther from
+  their world box than the nearest object. Cheap analytic objects are written as in P01
+  (`../design/03-scene-lowering.md` § Culling).
+- T2: a structural edit lowers, compiles and links on a compile thread, and the viewport
+  draws the old image until the new program links (`../design/01-render-path.md`
+  § Asynchronous compile).
+- T3: the owner re-measured on the GTX at b163141 with a cold shader cache
+  (`02-measurements.md` § GTX 1050 Ti at b163141). Per added object, settled GPU at 1.0:
+  - TPMS-in-box +1.96 ms, against +2.49 without culling;
+  - primitives +0.29 ms, against +0.28;
+  - a column in depth +0.13 ms.
+- The window kept orbiting through a cold 2.6 s compile.
+- E-21 and E-23 are closed. P07 is closed.
 
 Done: P02, go or no-go (`../../plan/30_P02_go_no_go.md`). `03-go-no-go.md` says **go**,
 approved by the owner on 2026-10-13. Every analytic and one-mesh scene measured orbits at
@@ -55,7 +70,7 @@ the moving frame time is within about 10% on the like-for-like rows. P00 is clos
 
 ## Next up
 
-P07 (above), then P03, which waits on E-08 (`../decisions/02-open.md`).
+P03, once E-08 is decided (`../decisions/02-open.md`).
 
 ## Files
 
@@ -63,5 +78,5 @@ P07 (above), then P03, which waits on E-08 (`../decisions/02-open.md`).
 - `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00 and P01.
 - `02-measurements-p00.jsonl` — the raw `--bench` output of the owner's two P00.5 runs on the GTX 1050 Ti (2026-10-10).
 - `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).
-- `02-measurements-p07.jsonl` — the raw `--bench` output of the owner's GTX 1050 Ti runs of P07.1 (2026-10-13): the first 20 lines at dd92129 (culling all objects), the last 20 at 6f3a8bd (culling costly objects only, option C).
+- `02-measurements-p07.jsonl` — the raw `--bench` output of the owner's GTX 1050 Ti runs of P07.1 (2026-10-13): the first 20 lines at dd92129 (culling all objects), the next 20 at 6f3a8bd (culling costly objects only, option C); and of P07.3: the last 20 at b163141, cold shader cache.
 - `03-go-no-go.md` — P02's verdict from the measurements: what met the feasibility target, what missed, the deferred items triggered, and the plan edits proposed for P03–P06.

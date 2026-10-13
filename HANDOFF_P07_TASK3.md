@@ -2,76 +2,133 @@
 
 Date: 2026-10-13. Plan: `plan/35_P07_render_scaling.md` § T3. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: blocked on the owner's GTX run.** The tooling and the checklist are ready. The
-rows, the slopes, the cold compile and the live-window check have to come from the laptop
-(E-04). No C++ changed, so a build at 4b89008 or later measures T2's code.
+**Status: done.** The owner measured on the GTX at b163141 with a cold shader cache.
+E-21 and E-23 are closed, P07 is closed, and the roadmap focus is P03. One result is
+**open**, not a pass: the cold compiles are longer than P01.4's, and the reason is not
+known (§ Open).
 
 ## What changed and why
 
+First session (b163141):
 - **`scripts/measure_viewport.py --unit ID`** sets the unit id printed in each row. The
-  default is unchanged (`P00.5`, or `P01.4` with `--objects`). P07 T1's GTX runs were
-  labelled `P01.4` by the script, which made them easy to confuse with P01's rows.
+  default is unchanged (`P00.5`, or `P01.4` with `--objects`). P07 T1's runs had been
+  labelled `P01.4`.
 - **`docs/roadmap/02-measurements.md` § How to measure (P07 T3 checklist).** It clears the
-  driver's shader cache before the script, so each scene's first run (at 0.35) is a cold
-  compile. The 6f3a8bd run skipped this, and its 12–60 ms compiles came from the cache. It
-  clears the cache again before the live-window check, so the status bar's compile ms for
-  the third TPMS-in-box is cold too.
-  - Windows: `%LOCALAPPDATA%\NVIDIA\GLCache`.
-  - Linux: `~/.nv/GLCache`.
-- **`plan/35_P07_render_scaling.md` § T3, criterion 2 corrected.** It read "the
-  per-primitive slope of the planar family falls well below P01.4's". Since the owner's
-  option C (P07.1), primitives are not culled, so their shader is P01's. The 6f3a8bd run
-  measured +0.29 ms against P01.4's +0.28. It now reads: the planar slope stays near
-  P01.4's, and the TPMS-in-box slope falls below +2.49 ms.
-- **Criterion 4 added:** the cold compile of each scene is recorded beside P01.4's.
-  P07.1's notes left the cold figure to T3. This is asked of the owner as question 2.
-- **Docs:**
-  - `docs/command_reference/01-viewport.md` names `--unit` and the depth-stacked family.
-  - `docs/roadmap/README.md`: T2 is done, T3 waits on the GTX run.
-  - P07.3's notes are in the plan.
+  driver's shader cache before the script and again before the live-window check. P07 T1's
+  6f3a8bd run skipped this, so its compiles came from the cache.
+- **Plan, T3 criterion 2 corrected.** "The planar slope falls well below P01.4's" became
+  "stays near P01.4's, and the TPMS-in-box slope falls below +2.49 ms". Under option C,
+  primitives are not culled.
+- **Plan, T3 criterion 4 added:** the cold compiles are recorded beside P01.4's.
+- **Docs:** the command reference names `--unit`.
 
-## Measured (development box, tool check only, not a performance figure — E-04)
+After the owner's run (this commit):
+- **`docs/roadmap/02-measurements.md` § GTX 1050 Ti at b163141 (P07 T3, cold cache):** the
+  slope table beside b011b24, dd92129 and 6f3a8bd, the cold-compile table, the live-window
+  answers and the findings.
+- **`docs/roadmap/02-measurements-p07.jsonl`:** the owner's 20 raw lines are appended, as
+  the last 20 lines. The BOM was stripped and CRLF endings kept, as in the file.
+- **`docs/decisions/03-deferred.md`:** E-21 and E-23 are **Closed (P07.3)**.
+- **`docs/roadmap/README.md`:** the focus is now P03, which waits on E-08. The cold-compile
+  item is open. P07 is listed as done. The jsonl's file entry is updated.
+- **Plan:** P07.3's notes.
 
-`LIBGL_ALWAYS_SOFTWARE=1 python scripts/measure_viewport.py --objects --unit P07.3 --size 160x100 --frames 4`.
-Conditions: llvmpipe (Mesa 26.0.8, LLVM 21.1.8), Qt 6.10.2, commit 5d34d7e plus the script
-change.
-- It ran 20 scenes end to end in 52 s, with every row labelled `P07.3`.
-- Settled GPU per added object at 1.0: primitives +1.36 ms, stacked in depth +0.29 ms,
-  TPMS-in-box +18.98 ms. P01.4's llvmpipe tool check gave +1.57 and +20.2.
-- 3 TPMS-in-box compiled in 517 ms cold at 0.35, and 80 ms at 1.0 from Mesa's cache.
+## Measured (owner, GTX 1050 Ti, 2026-10-13)
+
+Conditions: b163141, the same C++ as 4b89008, and the build matched. Windows 10, driver
+441.93 (GL 3.3.0), Qt 6.8.3, Release, mains power, no other editor window. 1280×800,
+60 frames per phase. `%LOCALAPPDATA%\NVIDIA\GLCache` (138 files, 30.7 MB) was emptied before
+the script. The bundle is `.plan-run/P07_T3_GTX_2026-10-13_b163141.zip`, which is not
+tracked.
+
+Per added object, settled GPU ms:
+
+| Family | at 1.0 | at 0.35 | P01.4 at 1.0 |
+|---|---|---|---|
+| primitives (1, 3, 5, 10) | +0.29 | +0.34 | +0.28 |
+| stacked in depth (1, 3, 5, 10) | +0.13 | +0.11 | — |
+| TPMS-in-box (1, 3) | +1.96 | +1.95 | +2.49 |
+
+Cold compile, first run at 0.35, GUI thread (`--bench`), ms:
+
+| Scene | b011b24 (P01.4) | b163141 |
+|---|---|---|
+| 1 primitive | 157 | 152 |
+| 3 primitives | 265 | 399 |
+| 5 primitives | 413 | 512 |
+| 10 primitives | 670 | 1137 |
+| 1 TPMS-in-box | 339 | 757 |
+| 3 TPMS-in-box | 1210 | 1897 |
+
+**Live window, cold** (the cache emptied again):
+- Setup: `DualCEditor tpms_box_0.fld tpms_box_1.fld`, then `tpms_box_2.fld` dropped during
+  a held orbit.
+- The view kept turning while the status bar read `compile …`. The owner said "all good".
+- Then the status bar read `shader compile 2566.6 ms`, timed on the compile thread.
+
+## Acceptance criteria of T3
+
+1. **The rows are in `02-measurements.md`**, with the growth per added object beside
+   P01.4's. Met (the section above, in that file).
+2. **The planar slope stays near P01.4's** (+0.29 against +0.28), **and the TPMS-in-box
+   slope falls below +2.49** (+1.96). Met. This is the criterion as corrected in the first
+   session. The owner did not pick an option on that question. The driver read the answer
+   as option A, keep both edits. **The owner should confirm this.**
+3. **A third TPMS-in-box added in the live window:** the window stayed responsive, and the
+   compile ms was 2567. Met.
+4. **The cold compiles are beside P01.4's.** Recorded. They are longer, which is open
+   below, not a pass.
 
 ## Exit criteria of P07, one by one
 
 | Bullet | State | Evidence |
 |---|---|---|
-| T1 met | yes | 0 / 480 000 px snapshot diff on the GTX at dd92129 and 6f3a8bd. `scene_render_test` steps 4–5. Pick test. Owner passed P07.1 (2026-10-13). |
-| T2 met | yes | `async_compile` 17/17 on the GTX at 4b89008. The owner saw the window keep orbiting during a compile. Owner passed P07.2. |
-| T3 met | **no — owner's run** | Checklist ready. Needs the twenty rows, the six slopes, the cold compiles and the live-window answer. |
-| `check.py` green | yes | `python scripts/check.py` exit 0 on NV92 at this commit, 13/13 ctests. |
-| E-21, E-23 closed in `03-deferred.md` | **not yet** | Both read *Built*. E-23 says "closes when P07 T3 measures the slope". E-21's responsiveness check passed at 4b89008, but its cold compile figure is T3's. I close both once the numbers are in. |
-| `docs/roadmap/README.md` names P03 | **not yet** | It names P03 under *Next up*. The focus moves to P03 when P07 closes. |
+| T1 met | yes | 0 / 480 000 px snapshot diff on the GTX at dd92129 and 6f3a8bd. `scene_render_test` steps 4–5. Pick test. The owner passed P07.1. |
+| T2 met | yes | `async_compile` 17/17 on the GTX at 4b89008. The owner passed P07.2. |
+| T3 met | yes | Above. Criterion 2's wording awaits the owner's confirmation. |
+| `check.py` green | yes | `python scripts/check.py` exits 0 on NV92 at this commit, 13/13 ctests. |
+| E-21, E-23 closed in `03-deferred.md` | yes | Both carry **Closed (P07.3, 2026-10-13)**. |
+| `docs/roadmap/README.md` names P03 | yes | *Now: P03, scene model*, waiting on E-08. |
 
 ## What I got wrong on the way
 
-Nothing went wrong in this unit. One thing to watch: the window's 3-TPMS shader can be the
-same source as the script's 3-TPMS scene. If so, the driver's cache would serve it after
-step 2, which is why the checklist clears the cache a second time.
+- The first draft of this handoff left open whether the window's 2567 ms includes the
+  codegen. It does not. `TraceRenderer::linkProgram` starts its clock after
+  `assembleSceneShader` and stops it at the link status, on both paths (the compile thread
+  and `--bench`). So the two figures time the same span, and the gap is not the codegen.
+- The owner's README lists P01.4's 1 TPMS-in-box cold compile as "—". `02-measurements.md`
+  § Against object count gives 339 ms, and that is what the table uses.
 
 ## Open
 
-- **The owner's GTX run** (checklist steps 1–4).
+- **The cold compiles are longer than P01.4's, cause unknown.**
+  - 10 primitives: 1137 against 670 ms, although option C gives primitives P01's shader
+    (`docs/design/03-scene-lowering.md` § The cost rule). Candidates, none checked:
+    - the generated source differs from b011b24's in a way not intended (box uniforms
+      declared, or a changed `sceneColor`);
+    - the driver differs on that run;
+    - noise. There is one sample of each.
+
+    A first check: diff the fragment source of the 10-primitive scene at b011b24 and at
+    HEAD. On the dev box the source can be dumped, so this does not need the GTX.
+  - TPMS-in-box: 757 / 1897 against 339 / 1210 ms. The culling branch around each costly
+    SDF accounts for part of this (P07.1 saw cold compiles triple when every object was
+    culled).
+  - The window's compile thread takes 2567 ms against the bench's 1897 ms for the same
+    3-TPMS scene. A slower link on a second, shared context would fit
+    (`HANDOFF_P07_TASK2.md` § Open). There is one sample of each.
+  - The window stays responsive, so none of this blocks P03.
+- **The stacked-in-depth compiles (4–36 ms) were not cold.** They likely share a source
+  with the side-by-side scenes, but that was not checked.
 - **The `main_window` failure on the GTX** (`tests/main_window_test.cpp:220`) is still its
-  own item, not part of T3.
-- **E-21's program cache:** whether it is still unbuilt depends on the cold compile ms. If
-  the owner finds a cold 3-TPMS compile too long even off the GUI thread, that is a new
-  trigger for the editor cache. The plan did not build one.
+  own item.
+- **Criterion 2's corrected wording** awaits the owner's explicit confirmation (option A).
 
 ## For the next unit
 
-When the numbers arrive:
-1. Append the raw JSON to `docs/roadmap/02-measurements-p07.jsonl` and list it in
-   `docs/roadmap/README.md`.
-2. Add a § GTX 1050 Ti at T2's commit (P07 T3) table to `02-measurements.md`, beside
-   b011b24, dd92129 and 6f3a8bd. Include the cold compiles.
-3. Close E-21 and E-23 in `docs/decisions/03-deferred.md`.
-4. Move the roadmap focus to P03, which waits on E-08 (the driver stops there).
+- The next phase is P03, which waits on E-08 (the scene file format,
+  `docs/decisions/02-open.md`). The driver stops there.
+- P03 T3 (gizmo): a move is a uniform upload, including the culling box
+  (`u_o<id>_boxMin`/`boxMax`). It works during a compile. A structural edit goes through
+  `MainWindow::apply` → `buildScene`. Wait for `sceneApplied` / `loadFinished` before
+  reading the new scene.

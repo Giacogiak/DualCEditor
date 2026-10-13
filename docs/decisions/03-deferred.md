@@ -23,6 +23,13 @@ compile first, an editor program cache only if measured to help.
 thread with a context shared with the viewport's. The viewport draws the old program until
 the new one links, and the last edit wins (`../design/01-render-path.md` § Asynchronous
 compile). No editor program cache. The owner's responsiveness check is P07 T3.
+**Closed (P07.3, 2026-10-13).** On the GTX at b163141, cold cache, the owner dropped a
+third TPMS-in-box during a held orbit. The view kept turning through a 2567 ms compile
+(`../roadmap/02-measurements.md` § GTX 1050 Ti at b163141). The program cache stays
+unbuilt. Cold compiles are longer than P01.4's (10 primitives 1137 against 670 ms; 3
+TPMS-in-box 1897 against 1210 ms, and 2567 ms on the compile thread). That is not
+explained yet and is tracked as its own item (`../../HANDOFF_P07_TASK3.md`). A program
+cache would only help a source seen before, which the driver's own cache already serves.
 
 ## E-22 — Freeze an object to a baked grid
 Bake a finished non-lattice object to a 3D texture so its per-step cost is constant.
@@ -44,6 +51,14 @@ TPMS-in-box, settled GPU at 1280×800 on the GTX 1050 Ti (`../roadmap/02-measure
 `p` is farther from its world box (`u_o<id>_boxMin`/`boxMax`, uniforms) than
 the nearest object so far (`../design/03-scene-lowering.md` § Culling). Closes when P07 T3
 measures the slope on the GTX.
+**Closed (P07.3, 2026-10-13).** On the GTX at b163141, per added object, settled GPU at 1.0:
+- TPMS-in-box +1.96 ms, against +2.49 before the culling;
+- primitives +0.29 ms, against +0.28; they are not culled under option C;
+- a column stacked in depth +0.13 ms.
+
+The images are unchanged (0 px, P07.1). Culling each primitive did not pay
+(+0.40 ms at dd92129). The first object in scene order is still paid on every ray. A
+two-pass scheme (P07.1's option B) is the lever if a later phase needs more.
 
 ## E-24 — Reuse of one object in several operations (DAG references)
 DualC's graph is a tree (DualC D-12). **Trigger:** the scene model needs an object used by

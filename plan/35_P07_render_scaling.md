@@ -85,6 +85,15 @@ checklist (`docs/roadmap/02-measurements.md` § How to measure (P07 T3 checklist
 clears the shader cache before the run and before the live-window check. Criterion 2 is
 corrected above, and a cold-compile criterion added (P07.1 asked for the cold figure). The
 measurement itself is the owner's (`HANDOFF_P07_TASK3.md`).
+The owner ran it at b163141 (2026-10-13, `docs/roadmap/02-measurements.md` § GTX 1050 Ti
+at b163141):
+- Per added object, settled GPU at 1.0: primitives +0.29 ms, stacked in depth +0.13,
+  TPMS-in-box +1.96.
+- The window kept orbiting through a cold 2567 ms compile.
+- The cold compiles are recorded beside P01.4's. They are longer, which is unexplained
+  and left open in the handoff.
+
+All four criteria are met. Criterion 4 asked for the record, not for a bound.
 
 ## Exit criteria
 - Tasks T1 to T3 are met. `python scripts/check.py` is green.
