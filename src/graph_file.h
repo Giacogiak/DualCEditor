@@ -8,21 +8,35 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <utility>
 
 // DualC's FileMeshResolver with relative paths tried against `dir` first, so
 // a graph finds the meshes that sit beside it. An empty `dir` resolves against
-// the working directory only.
+// the working directory only. An `id=` mesh comes from the process's mesh
+// library (mesh_library.h), registered with DualC's InMemoryMeshResolver on
+// first use.
 class GraphDirMeshResolver : public dce::fieldgraph::MeshResolver {
  public:
   explicit GraphDirMeshResolver(QString dir) : dir_(std::move(dir)) {}
   dce::fieldgraph::MeshHandle resolve(const std::string& path) override;
+  dce::fieldgraph::MeshHandle resolveId(const std::string& id) override;
 
  private:
   QString dir_;
   dce::fieldgraph::FileMeshResolver files_;
+  dce::fieldgraph::InMemoryMeshResolver ids_;
+  std::set<std::string> registered_;
 };
+
+// DualC's GLSL codegen (compileToGlsl, at the pinned commit) reads a `mesh` or
+// `winding` source by its `path` only: an `id` is refused. This copy of
+// `graph` names each id as the path kMeshIdPath + id instead, which
+// GraphDirMeshResolver::resolve sends to resolveId. Only the codegen sees it;
+// the scene's graphs keep the id (docs/design/07-mesh-import.md).
+inline constexpr const char* kMeshIdPath = "dualceditor-mesh-id:";
+dce::fieldgraph::GraphNode meshIdsAsPaths(dce::fieldgraph::GraphNode graph);
 
 // The folder a graph read from `path` resolves its mesh paths against: the
 // file's own folder, or none for a Qt resource.

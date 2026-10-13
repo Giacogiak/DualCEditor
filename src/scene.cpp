@@ -208,7 +208,7 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
     try {
       GraphDirMeshResolver meshes(o.meshDir);
       lo.localBounds = traceBounds(o.graph, meshes);
-      part = fg::compileToGlsl(wrapInTransform(o), meshes, lo.localBounds);
+      part = fg::compileToGlsl(meshIdsAsPaths(wrapInTransform(o)), meshes, lo.localBounds);
     } catch (const fg::GraphError& e) {
       throw fg::GraphError("object " + std::to_string(o.id) + " (" + o.name.toStdString() +
                                "): " + e.what(),

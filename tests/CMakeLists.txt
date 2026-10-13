@@ -145,3 +145,12 @@ dualceditor_target_options(scene_file_test)
 add_test(NAME scene_file
   COMMAND scene_file_test
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
+
+# The mesh readers (P04 T1, E-09), GL-free: one fixture per format (OBJ, PLY,
+# STL) gives its vertex and face counts after welding; malformed files give an
+# error message, not a crash; a mesh registered by id lowers as mesh(id=...).
+add_executable(mesh_import_test mesh_import_test.cpp)
+target_link_libraries(mesh_import_test PRIVATE dualceditor_core)
+dualceditor_target_options(mesh_import_test)
+add_test(NAME mesh_import
+  COMMAND mesh_import_test ${CMAKE_CURRENT_SOURCE_DIR}/data/meshes)

@@ -1,24 +1,54 @@
 #include "graph_file.h"
 
 #include "graph_scene.h"
+#include "mesh_library.h"
 
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 
+#include <cstring>
 #include <exception>
+#include <memory>
 #include <string>
 #include <utility>
 
 namespace fg = dce::fieldgraph;
 
 fg::MeshHandle GraphDirMeshResolver::resolve(const std::string& path) {
+  if (path.rfind(kMeshIdPath, 0) == 0) return resolveId(path.substr(std::strlen(kMeshIdPath)));
   const QString p = QString::fromStdString(path);
   if (!dir_.isEmpty() && QDir::isRelativePath(p)) {
     const QString beside = QDir(dir_).filePath(p);
     if (QFileInfo::exists(beside)) return files_.resolve(beside.toStdString());
   }
   return files_.resolve(path);
+}
+
+fg::MeshHandle GraphDirMeshResolver::resolveId(const std::string& id) {
+  if (!registered_.count(id)) {
+    const std::shared_ptr<const MeshBuffers> mesh = findLibraryMesh(id);
+    if (!mesh) throw fg::GraphError("no imported mesh has the id '" + id + "'", "");
+    ids_.registerMesh(id, mesh->vertices.data(), mesh->vertexCount(), mesh->indices.data(),
+                      mesh->triangleCount());
+    registered_.insert(id);
+  }
+  return ids_.resolveId(id);
+}
+
+fg::GraphNode meshIdsAsPaths(fg::GraphNode graph) {
+  if (graph.op == "mesh" || graph.op == "winding") {
+    const auto id = graph.params.find("id");
+    if (id != graph.params.end() && id->second.kind == fg::ParamValue::Kind::String &&
+        !graph.params.count("path")) {
+      fg::ParamValue path = id->second;
+      path.str = kMeshIdPath + path.str;
+      graph.params.erase(id);
+      graph.params["path"] = std::move(path);
+    }
+  }
+  for (fg::GraphNode& c : graph.in) c = meshIdsAsPaths(std::move(c));
+  return graph;
 }
 
 QString graphMeshDir(const QString& path) {

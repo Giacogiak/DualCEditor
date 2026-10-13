@@ -2,12 +2,18 @@
 
 ## Current focus
 
-**Now: P03, scene model (`../../plan/40_P03_scene_model.md`).** E-08 is decided (zip
-container). T1, operation history and undo, is done (`../design/04-scene-model.md`,
-`../../HANDOFF_P03_TASK1.md`). T2, saving and loading `.dcscene`, is done
-(`../design/05-dcscene-format.md`, `../../HANDOFF_P03_TASK2.md`). T3, the transform gizmo,
-is done (`../design/06-transform-gizmo.md`, `../../HANDOFF_P03_TASK3.md`), and so is P03;
-its GTX checks are queued. Next is P04, import.
+**Now: P04, import (`../../plan/50_P04_import.md`).** E-09 is decided (OBJ, PLY and STL;
+3MF deferred). T1, the mesh readers, is done (`../design/07-mesh-import.md`,
+`../../HANDOFF_P04_TASK1.md`): the three formats read into welded triangle buffers, a
+malformed file gives a message, and a read mesh is named in a graph by id through DualC's
+`InMemoryMeshResolver`. Next is T2: the drop, `mesh` or `winding` by DualC's diagnostics,
+and "Make watertight".
+
+Done: P03, scene model (`../../plan/40_P03_scene_model.md`). T1, operation history and
+undo (`../design/04-scene-model.md`, `../../HANDOFF_P03_TASK1.md`); T2, `.dcscene`
+(`../design/05-dcscene-format.md`, `../../HANDOFF_P03_TASK2.md`); T3, the transform gizmo
+(`../design/06-transform-gizmo.md`, `../../HANDOFF_P03_TASK3.md`). Its GTX checks are
+queued.
 
 **Open from P07 (`../../HANDOFF_P07_TASK3.md`):** cold shader compiles are longer than
 P01.4's, and the reason is not known:

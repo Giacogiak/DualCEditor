@@ -65,6 +65,10 @@ add_library(dualceditor_core STATIC
   src/graph_scene.h
   src/main_window.cpp
   src/main_window.h
+  src/mesh_import.cpp
+  src/mesh_import.h
+  src/mesh_library.cpp
+  src/mesh_library.h
   src/orbit_camera.cpp
   src/objects_panel.cpp
   src/objects_panel.h
