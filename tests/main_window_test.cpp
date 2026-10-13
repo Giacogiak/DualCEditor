@@ -13,6 +13,7 @@
 // usage: main_window_test <DualCEditor> <gyroid_box.json>
 
 #include "main_window.h"
+#include "objects_panel.h"
 #include "viewport.h"
 
 #include <QApplication>
@@ -306,6 +307,53 @@ int main(int argc, char* argv[]) {
     check(nextLoad(w) == 1, "fixing the file loads it");
     quiet(vp);
     check(vp.grabFramebuffer() == good, "the fixed file renders as before");
+  }
+
+  // Undo and redo through the window (P03 T1): a hide and its undo are
+  // uniforms only; an undone remove brings the object back, with its id.
+  {
+    // The selection is not part of the scene: a removed object loses it.
+    w.selectObject(0);
+    quiet(vp);
+    const QImage shown = vp.grabFramebuffer();
+    const int id = w.scene().objects().front().id;
+    const std::size_t count = w.scene().objects().size();
+    const int links = vp.linkCount();
+    // Every object hidden, one command each: the background is left.
+    for (const SceneObject& o : std::vector<SceneObject>(w.scene().objects()))
+      w.setObjectVisible(o.id, false);
+    quiet(vp);
+    check(vp.grabFramebuffer() != shown, "a hide changes the image");
+    for (std::size_t i = 0; i < count; ++i) w.undoStack()->undo();
+    quiet(vp);
+    check(w.scene().find(id)->visible, "undo shows the object again");
+    check(vp.grabFramebuffer() == shown, "undo of a hide restores the image");
+    w.undoStack()->redo();
+    check(!w.scene().find(id)->visible, "redo hides it again");
+    check(vp.linkCount() == links, "a hide, its undo and redo link nothing");
+    w.undoStack()->undo();
+    w.renameObject(id, "renamed");
+    check(w.scene().find(id)->name == "renamed" &&
+              w.objects()->row(id)->text() == "renamed",
+          "a rename reaches the scene and its row");
+    w.undoStack()->undo();
+    const auto bindingsBefore = vp.scene().bindings;
+    const std::string sourceBefore = vp.scene().generatedSource;
+    w.removeObject(id);
+    check(runUntil([&] { return !w.scene().find(id); }, 10000), "the remove lands");
+    w.undoStack()->undo();
+    check(runUntil([&] { return w.scene().find(id) != nullptr; }, 30000),
+          "undo of a remove brings the object back");
+    check(w.scene().objects().size() == count, "with every object");
+    quiet(vp);
+    check(vp.scene().generatedSource == sourceBefore, "undo of a remove: the same source");
+    bool sameValues = bindingsBefore.size() == vp.scene().bindings.size();
+    for (std::size_t i = 0; sameValues && i < bindingsBefore.size(); ++i)
+      sameValues = bindingsBefore[i].name == vp.scene().bindings[i].name &&
+                   bindingsBefore[i].value == vp.scene().bindings[i].value;
+    // Not the image: across a relink, this box's NV92 driver draws the same
+    // shader and uniforms differently (HANDOFF_P03_TASK1.md).
+    check(sameValues, "undo of a remove: the same uniforms and values");
   }
 
   // A shader that does not link: sceneFailed, the scene and image stay.

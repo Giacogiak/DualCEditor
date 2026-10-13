@@ -9,7 +9,7 @@
 // The Objects dock's contents: one row per scene object, in scene order, with
 // a visibility checkbox, a colour swatch and the object's name. One row at a
 // time is selected. Delete (QKeySequence::Delete) on the list asks to remove
-// the selected object. Nothing here touches the scene or GL: the window acts
+// the selected object; F2 or a double click edits its name. Nothing here touches the scene or GL: the window acts
 // on the signals (docs/command_reference/01-viewport.md § Objects).
 class ObjectsPanel : public QListWidget {
   Q_OBJECT
@@ -38,6 +38,7 @@ class ObjectsPanel : public QListWidget {
   void visibilityToggled(int id, bool visible);
   void selectionMoved(int id);  // 0: nothing selected
   void deleteRequested(int id);
+  void renameRequested(int id, const QString& name);
 
  protected:
   void keyPressEvent(QKeyEvent* event) override;

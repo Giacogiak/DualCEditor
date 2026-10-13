@@ -14,7 +14,9 @@ Every change goes through a command on a `QUndoStack`. Commands cover:
 - operations.
 
 An operation hides its operands, but does not delete them. Record the model in
-`docs/design/03-scene-model.md`, and close E-25 there.
+`docs/design/04-scene-model.md`, and close E-25 there. (P03.1: the plan said
+`03-scene-model.md`; design pages are numbered in birth order and `03` is
+`03-scene-lowering.md`.)
 
 #### Acceptance criteria
 - Undo and redo restore the exact scene: the same graphs and the same visibility.
@@ -27,7 +29,8 @@ Implement the format chosen in E-08:
 - embedded meshes;
 - relative names, never absolute paths.
 
-Document the format in `docs/design/04-dcscene-format.md`.
+Document the format in `docs/design/05-dcscene-format.md` (renumbered by P03.1: `04` is
+the scene model).
 
 #### Acceptance criteria
 - A save then load reproduces the scene. The ctest compares field values at sample points,

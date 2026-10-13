@@ -2,6 +2,7 @@
 
 #include "pick.h"
 #include "scene.h"
+#include "scene_document.h"
 
 #include <QByteArray>
 #include <QFileSystemWatcher>
@@ -26,8 +27,9 @@ class ParameterPanel;
 class Viewport;
 
 // The editor window: the Viewport, File > Open, a status bar, and the Objects,
-// Parameters and Log docks. The window holds a Scene (scene.h) of objects, one
-// per graph file, lowered to one shader. File > Open and the first command-line
+// Parameters and Log docks. The window holds a SceneDocument
+// (scene_document.h): a Scene of objects lowered to one shader, and the undo
+// stack every change goes through (Edit > Undo, Redo). File > Open and the first command-line
 // graph replace the scene with one object (openFile); a drop of .json or .fld
 // files, File > Add and further command-line graphs add objects (addFile).
 // Each object's file is watched and reloads when its text changes on disk,
@@ -59,6 +61,13 @@ class MainWindow : public QMainWindow {
   void removeObject(int id);
   // Show or hide object `id`: one uniform, no recompile, no relink.
   void setObjectVisible(int id, bool visible);
+  // Rename object `id`; an empty name is refused.
+  void renameObject(int id, const QString& name);
+
+  // The scene being edited and its undo stack. It runs ahead of scene() while
+  // a structural change compiles.
+  SceneDocument* document() { return &document_; }
+  QUndoStack* undoStack() { return document_.undoStack(); }
 
   // The scene on screen, and where its objects' bindings sit in
   // viewport()->scene().bindings.
@@ -97,10 +106,9 @@ class MainWindow : public QMainWindow {
   void dropEvent(QDropEvent* event) override;
 
  private:
-  // The scene, and where it came from.
+  // A scene; each object names the file it came from (SceneObject::file).
   struct Doc {
     Scene scene;
-    std::map<int, QString> files;  // object id -> its graph file
   };
   // The lowering of a Pending's doc, written on the compile thread
   // (Viewport::buildScene) and read once it has come back.
@@ -118,26 +126,42 @@ class MainWindow : public QMainWindow {
     std::set<int> fresh;  // objects whose graph was reloaded: file values
     // Files opened (true) or added (false) by it, watched if it fails.
     std::vector<std::pair<QString, bool>> waits;
+    // It replaced the document (an open): a failure resets the document to
+    // the scene on screen, with no history.
+    bool opened = false;
+  };
+  // How the next structural change of the document is applied: by a load
+  // (an open, an add, a reload) or, by default, by an edit, undo or redo.
+  struct ApplyContext {
+    bool frame = false;
+    QString loaded;
+    bool attempt = false;
+    std::set<int> fresh;
+    std::vector<std::pair<QString, bool>> waits;
+    bool opened = false;
   };
 
   void openDialog();
   void addDialog();
-  // Read and parse `path` into a new object of `doc` (of an empty doc when
-  // `replace`). False, reported, on an error.
-  bool loadInto(Doc& doc, const QString& path, bool replace);
+  // Read and parse `path`. None, reported, on an error.
+  std::optional<dce::fieldgraph::GraphNode> readGraph(const QString& path);
+  // The document changed: push uniforms, or rebuild the shader.
+  void documentChanged(const SceneDocument::Changes& changes);
+  // Copy object `id`'s name, flag, colour, transform and edits from the
+  // document to the scene on screen and the one compiling, and push its
+  // visible, colour, transform and box uniforms.
+  void syncObject(int id);
+  // The scene could not be shown: bring the document back to the scene on
+  // screen (undo or redo to its index, or, after an open, a reset).
+  void revertDocument(bool opened);
   // Send `doc` to the viewport, to be lowered and linked off the GUI thread.
   // When it comes back, bindings of objects not in `fresh` (the ids whose
   // graph was just reloaded) keep the values on screen (carryValues). An
   // error is reported then, and the files of `waits` are watched.
-  void apply(Doc doc, bool frame, const QString& loaded, bool attempt,
-             const std::set<int>& fresh = {},
-             std::vector<std::pair<QString, bool>> waits = {});
+  void apply(Doc doc, const ApplyContext& context);
   // The pending scene, just linked, takes the values on screen of the objects
   // it keeps, and the visible flags and colours of the pending doc.
   void carryValues(dce::fieldgraph::GlslScene& scene);
-  // The doc the next change builds on: the one on its way to the viewport,
-  // else the one on screen.
-  const Doc& latest() const { return pending_ ? pending_->doc : doc_; }
   void commit(Pending pending);
   void showObjects();
   void parameterEdited(int index, std::vector<float> value);
@@ -155,6 +179,12 @@ class MainWindow : public QMainWindow {
   QAction* deleteAction_;
   QLabel* timing_;
   double frameMs_ = -1.0, previewMs_ = -1.0;  // last GPU times; -1 = none yet
+  SceneDocument document_;  // being edited: the latest
+  // How the document's next structural change applies; reset after it.
+  std::optional<ApplyContext> next_;
+  bool adopting_ = false;  // the document is being set to match the screen
+  int shownIndex_ = 0;     // the undo index of the scene on screen
+  QAction* renameAction_;
   Doc doc_;  // on screen
   LoweredScene lowered_;
   std::optional<Pending> pending_;

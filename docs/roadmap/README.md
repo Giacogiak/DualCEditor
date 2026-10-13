@@ -2,9 +2,9 @@
 
 ## Current focus
 
-**Now: P03, scene model (`../../plan/40_P03_scene_model.md`), which waits on E-08, the scene file format
-(`../decisions/02-open.md`).** The plan-run driver stops there until the owner decides
-E-08.
+**Now: P03, scene model (`../../plan/40_P03_scene_model.md`).** E-08 is decided (zip
+container). T1, operation history and undo, is done (`../design/04-scene-model.md`,
+`../../HANDOFF_P03_TASK1.md`); next is T2, saving and loading `.dcscene`.
 
 **Open from P07 (`../../HANDOFF_P07_TASK3.md`):** cold shader compiles are longer than
 P01.4's, and the reason is not known:

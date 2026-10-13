@@ -135,7 +135,7 @@ the pointer is a character offset.
 | Part | Content |
 |---|---|
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Quit` (`Ctrl+Q`, the platform's Quit shortcut). |
-| `Edit` menu | `Delete Object`: removes the selected object. Greyed out with nothing selected. |
+| `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
 | `View` menu | `Objects`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Parameters. One row per object. See *Objects* below. |
@@ -165,6 +165,7 @@ The selected object is tinted toward amber (mix 0.45 with (1.0, 0.78, 0.20), bef
 1/2.2 gamma) and the other objects are dimmed to 0.45 of their colour; with nothing
 selected every object has its own colour. Selecting sets one uniform (`u_selected`): no
 recompile, no relink.
+| `F2`, a double click on the name, or `Edit ▸ Rename Object` | Edit the object's name in its row; `Enter` renames it, `Esc` keeps the old one. An empty name is refused. The window title and the Parameters dock follow. No recompile. |
 | `Delete` (`QKeySequence::Delete`, by meaning) with the dock focused, or `Edit ▸ Delete Object` | Remove the selected object. The scene is lowered and linked again (one link); the camera stays. The other objects keep their parameter edits. Deleting the last one leaves the viewport on the background. |
 
 The swatch is the object's colour with the shader's 1/2.2 gamma: a lit face of the object is
@@ -173,6 +174,24 @@ DualC's grey, then orange, blue, green, yellow, purple, teal, pink. `File ▸ Op
 new scene, so ids and colours start again. There is no colour picker yet: edit the
 object's `colour` in the Parameters dock, and the swatch follows. Unchecking `visible`
 there (0) checks the box off too.
+
+## Undo and redo
+
+Every change to the scene is one step on an undo stack (`../design/04-scene-model.md`):
+
+| Step | Undo |
+|---|---|
+| Add (`File ▸ Add…`, a drop, a later command-line graph) | Removes the object. Its id is not given to the next add. |
+| Delete | Puts the object back at its place, with its id, colour, name and parameter edits. |
+| Rename, show or hide, an edit of `colour` or `matrix` in the Parameters dock | The old value; one uniform, no recompile, no relink. |
+| A parameter edit | The old value; one uniform. Steps of one spin box in a row are one step. |
+| A reload of a changed file | The graph before the reload, with its edits. Several files reloaded together are one step. |
+
+An undo or redo that adds or removes an object, or changes a graph, lowers and links the
+scene again, as a delete does; the camera stays. `File ▸ Open…` starts a new scene and
+clears the history. If the scene a step leads to cannot be shown (a field-graph or shader
+error), the step is undone again, the error goes to the status bar and the log, and
+`Redo` offers it back. The selection is not undone.
 
 ## Parameters
 
@@ -204,6 +223,7 @@ The range is −10⁶ to 10⁶, with up to six decimals. No other bound is enfor
 wavelength or thickness gives what the shader computes.
 
 An edit only sets the uniform. The shader is not recompiled or relinked, so it shows at once.
+Each edit is an undo step (*Undo and redo* above).
 The view previews and settles as for a camera move. Edits are not written to the file. A
 reload of the file, or opening another one, brings back the file's values and rebuilds the
 dock. Adding or deleting another object keeps them. The trace step sizes stay those of the file's values: they come from the compiled graph,

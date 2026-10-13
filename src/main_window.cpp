@@ -21,6 +21,7 @@
 #include <QMimeData>
 #include <QPlainTextEdit>
 #include <QStatusBar>
+#include <QUndoStack>
 #include <QUrl>
 
 #include <algorithm>
@@ -79,6 +80,8 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   connect(objects_, &ObjectsPanel::visibilityToggled, this, &MainWindow::setObjectVisible);
   connect(objects_, &ObjectsPanel::selectionMoved, this, &MainWindow::selectObject);
   connect(objects_, &ObjectsPanel::deleteRequested, this, &MainWindow::removeObject);
+  connect(objects_, &ObjectsPanel::renameRequested, this, &MainWindow::renameObject);
+  connect(&document_, &SceneDocument::changed, this, &MainWindow::documentChanged);
 
   parameters_ = new ParameterPanel(this);
   parameters_->setAcceptDrops(false);
@@ -100,6 +103,18 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   QAction* quit = fileMenu->addAction("&Quit", this, &QWidget::close);
   quit->setShortcut(QKeySequence::Quit);
   QMenu* editMenu = menuBar()->addMenu("&Edit");
+  QAction* undo = document_.undoStack()->createUndoAction(this, "&Undo");
+  undo->setShortcut(QKeySequence::Undo);
+  editMenu->addAction(undo);
+  QAction* redo = document_.undoStack()->createRedoAction(this, "&Redo");
+  redo->setShortcut(QKeySequence::Redo);
+  editMenu->addAction(redo);
+  editMenu->addSeparator();
+  renameAction_ = editMenu->addAction("Re&name Object", this, [this] {
+    if (QListWidgetItem* row = objects_->row(selected_)) objects_->editItem(row);
+  });
+  renameAction_->setShortcut(Qt::Key_F2);
+  renameAction_->setEnabled(false);
   deleteAction_ = editMenu->addAction("&Delete Object", this, [this] {
     removeObject(selected_);
   });
@@ -131,6 +146,7 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
     for (const auto& w : p.waits)
       if (std::find(waiting_.begin(), waiting_.end(), w) == waiting_.end())
         waiting_.push_back(w);
+    revertDocument(p.opened);
     if (p.lowering->failed)
       reportError(p.loaded, error);
     else if (p.attempts > 0)
@@ -159,63 +175,135 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
 
 void MainWindow::openFile(const QString& path) {
   file_ = absolute(path);
-  Doc doc;
-  if (loadInto(doc, file_, true))
-    apply(std::move(doc), true, file_, true, {}, {{file_, true}});
-  else
+  if (std::optional<fg::GraphNode> graph = readGraph(file_)) {
+    Scene scene;
+    scene.add(QFileInfo(file_).fileName(), std::move(*graph), graphMeshDir(file_)).file = file_;
+    next_ = ApplyContext{true, file_, true, {}, {{file_, true}}, true};
+    document_.reset(std::move(scene));
+  } else {
     waiting_.emplace_back(file_, true);
+  }
   watch();
 }
 
 void MainWindow::addFile(const QString& path) {
   file_ = absolute(path);
-  Doc doc = latest();
-  if (loadInto(doc, file_, false))
-    apply(std::move(doc), true, file_, true, {}, {{file_, false}});
-  else
+  if (std::optional<fg::GraphNode> graph = readGraph(file_)) {
+    next_ = ApplyContext{true, file_, true, {}, {{file_, false}}, false};
+    document_.addObject(QFileInfo(file_).fileName(), std::move(*graph), graphMeshDir(file_),
+                        file_);
+  } else {
     waiting_.emplace_back(file_, false);
+  }
   watch();
 }
 
 void MainWindow::removeObject(int id) {
-  Doc doc = latest();
-  const SceneObject* o = doc.scene.find(id);
+  const SceneObject* o = document_.scene().find(id);
   if (!o) return;
   const QString name = o->name;
-  doc.scene.remove(id);
-  doc.files.erase(id);
-  if (!doc.scene.isEmpty()) {
-    apply(std::move(doc), false, {}, false);
-    statusBar()->showMessage(QString("Removed %1").arg(name));
-    return;
-  }
-  // No objects: nothing to lower or link.
-  pending_.reset();
-  viewport_->clearScene();
-  Pending empty;
-  empty.doc = std::move(doc);
-  commit(std::move(empty));
+  document_.removeObject(id);
   statusBar()->showMessage(QString("Removed %1").arg(name));
 }
 
 void MainWindow::setObjectVisible(int id, bool visible) {
-  SceneObject* o = doc_.scene.find(id);
+  document_.setVisible(id, visible);
+  // A refused change leaves the row as the document has it.
+  if (const SceneObject* o = document_.scene().find(id))
+    objects_->setObjectVisible(id, o->visible);
+}
+
+void MainWindow::renameObject(int id, const QString& name) {
+  // The Objects row keeps the old name until the document's change renames it.
+  if (!name.trimmed().isEmpty()) document_.renameObject(id, name.trimmed());
+}
+
+void MainWindow::documentChanged(const SceneDocument::Changes& changes) {
+  for (const SceneDocument::ParamChange& p : changes.params) {
+    syncObject(p.id);
+    const LoweredObject* lo = loweredObject(lowered_, p.id);
+    if (!lo || !viewport_->hasScene()) continue;
+    const std::vector<fg::UniformBinding>& bindings = viewport_->scene().bindings;
+    for (int i = lo->firstBinding; i < lo->endBinding && i < int(bindings.size()); ++i) {
+      const fg::UniformBinding& b = bindings[std::size_t(i)];
+      if (b.nodePointer != p.key.first || b.paramKey != p.key.second ||
+          b.value.size() != p.value.size())
+        continue;
+      viewport_->setParameter(i, p.value);
+      parameters_->showValue(i, p.value);
+    }
+  }
+  for (const int id : changes.objects) syncObject(id);
+  if (!changes.structure || adopting_) {
+    if (changes.structure) next_.reset();
+    return;
+  }
+  const ApplyContext context = next_.value_or(ApplyContext{});
+  next_.reset();
+  if (!document_.scene().isEmpty()) return apply(Doc{document_.scene()}, context);
+  // No objects: nothing to lower or link.
+  pending_.reset();
+  viewport_->clearScene();
+  Pending empty;
+  commit(std::move(empty));
+}
+
+void MainWindow::syncObject(int id) {
+  const SceneObject* from = document_.scene().find(id);
+  if (!from) return;
+  for (Doc* doc : {&doc_, pending_ ? &pending_->doc : nullptr}) {
+    SceneObject* o = doc ? doc->scene.find(id) : nullptr;
+    if (!o) continue;
+    o->name = from->name;
+    o->visible = from->visible;
+    o->colour = from->colour;
+    o->transform = from->transform;
+    o->edits = from->edits;
+  }
+  if (QListWidgetItem* row = objects_->row(id); row && row->text() != from->name)
+    showObjects();
+  objects_->setObjectVisible(id, from->visible);
+  objects_->setObjectColour(id, from->colour);
   const LoweredObject* lo = loweredObject(lowered_, id);
-  if (!o || !lo) return;
-  o->visible = visible;
-  // A scene still compiling keeps the flag too (carryValues).
-  if (pending_)
-    if (SceneObject* q = pending_->doc.scene.find(id)) q->visible = visible;
-  const std::vector<float> value{visible ? 1.0f : 0.0f};
-  viewport_->setParameter(lo->visibleBinding, value);
-  parameters_->showValue(lo->visibleBinding, value);
-  objects_->setObjectVisible(id, visible);
+  if (!lo || !viewport_->hasScene()) return;
+  const dualc::Mat4 localFromWorld = from->transform.inverseRigid();
+  std::vector<float> matrix;
+  for (int i = 0; i < 4; ++i)
+    for (int j = 0; j < 4; ++j) matrix.push_back(float(localFromWorld.m[i][j]));
+  const dualc::BBox w = worldBox(lo->localBounds, from->transform);
+  const std::pair<int, std::vector<float>> values[] = {
+      {lo->visibleBinding, {from->visible ? 1.0f : 0.0f}},
+      {lo->colourBinding, {from->colour[0], from->colour[1], from->colour[2]}},
+      {lo->transformBinding, matrix},
+      {lo->boxMinBinding, {float(w.min.x), float(w.min.y), float(w.min.z)}},
+      {lo->boxMaxBinding, {float(w.max.x), float(w.max.y), float(w.max.z)}}};
+  const std::vector<fg::UniformBinding>& bindings = viewport_->scene().bindings;
+  for (const auto& [index, value] : values) {
+    if (index < 0 || index >= int(bindings.size()) ||
+        bindings[std::size_t(index)].value == value)
+      continue;
+    viewport_->setParameter(index, value);
+    parameters_->showValue(index, value);
+  }
+}
+
+void MainWindow::revertDocument(bool opened) {
+  adopting_ = true;
+  if (opened) {
+    document_.reset(doc_.scene);
+  } else {
+    QUndoStack* stack = document_.undoStack();
+    while (stack->index() > shownIndex_ && stack->canUndo()) stack->undo();
+    while (stack->index() < shownIndex_ && stack->canRedo()) stack->redo();
+  }
+  adopting_ = false;
 }
 
 void MainWindow::selectObject(int id) {
   if (!doc_.scene.find(id)) id = 0;
   if (objects_->selectedId() != id) objects_->select(id);
   deleteAction_->setEnabled(id != 0);
+  renameAction_->setEnabled(id != 0);
   viewport_->setSelectedObject(id);
   if (id == selected_) return;
   selected_ = id;
@@ -275,36 +363,29 @@ void MainWindow::addDialog() {
   for (const QString& path : paths) addFile(path);
 }
 
-bool MainWindow::loadInto(Doc& doc, const QString& path, bool replace) {
+std::optional<fg::GraphNode> MainWindow::readGraph(const QString& path) {
   QFile file(path);
   if (!file.open(QIODevice::ReadOnly)) {
     texts_.erase(path);
     reportError(path, QString("cannot read %1: %2").arg(path, file.errorString()));
-    return false;
+    return std::nullopt;
   }
   const QByteArray text = file.readAll();
   texts_[path] = text;
   GraphParse parse = parseGraphFileText(text, path);
-  if (!parse.graph) {
-    reportError(path, parse.error);
-    return false;
-  }
-  if (replace) doc = Doc{};
-  const int id =
-      doc.scene.add(QFileInfo(path).fileName(), std::move(*parse.graph), graphMeshDir(path)).id;
-  doc.files[id] = path;
-  return true;
+  if (!parse.graph) reportError(path, parse.error);
+  return std::move(parse.graph);
 }
 
-void MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
-                       const std::set<int>& fresh,
-                       std::vector<std::pair<QString, bool>> waits) {
+void MainWindow::apply(Doc doc, const ApplyContext& context) {
+  const bool frame = context.frame;
   Pending p;
   p.doc = std::move(doc);
-  p.loaded = loaded;
-  p.attempts = attempt ? 1 : 0;
-  p.fresh = fresh;
-  p.waits = std::move(waits);
+  p.loaded = context.loaded;
+  p.attempts = context.attempt ? 1 : 0;
+  p.fresh = context.fresh;
+  p.waits = context.waits;
+  p.opened = context.opened;
   // A scene still compiling is replaced: this one builds on its doc, and ends
   // its attempts.
   if (pending_) {
@@ -312,6 +393,7 @@ void MainWindow::apply(Doc doc, bool frame, const QString& loaded, bool attempt,
     p.fresh.insert(pending_->fresh.begin(), pending_->fresh.end());
     p.waits.insert(p.waits.begin(), pending_->waits.begin(), pending_->waits.end());
     if (p.loaded.isEmpty()) p.loaded = pending_->loaded;
+    p.opened = p.opened || pending_->opened;
   }
   p.lowering = std::make_shared<Lowering>();
   pending_ = std::move(p);
@@ -369,12 +451,13 @@ void MainWindow::carryValues(fg::GlslScene& scene) {
 
 void MainWindow::commit(Pending p) {
   doc_ = std::move(p.doc);
+  shownIndex_ = document_.undoStack()->index();
   lowered_ = p.lowering ? std::move(p.lowering->lowered) : LoweredScene{};
   picker_.reset();
   waiting_.erase(std::remove_if(waiting_.begin(), waiting_.end(),
                                 [this](const std::pair<QString, bool>& w) {
-                                  for (const auto& [id, file] : doc_.files)
-                                    if (file == w.first) return true;
+                                  for (const SceneObject& o : doc_.scene.objects())
+                                    if (o.file == w.first) return true;
                                   return false;
                                 }),
                  waiting_.end());
@@ -432,40 +515,29 @@ void MainWindow::showObjects() {
         if (QDoubleSpinBox* box = parameters_->editor(i, k)) box->setEnabled(false);
 }
 
-// The edit sets its uniform; an object's visible flag or colour also goes to
-// its scene object and its Objects row, and its transform moves its culling
-// box (uniforms too, no compile).
+// The edit goes to the document, as a command: an object's transform,
+// visible flag or colour to its scene object, any other binding to the
+// object's parameter edits. The document's change sets the uniforms (the
+// transform's culling box too), with no compile.
 void MainWindow::parameterEdited(int index, std::vector<float> value) {
-  viewport_->setParameter(index, value);
+  if (!viewport_->hasScene() || index < 0 || index >= int(viewport_->scene().bindings.size()))
+    return;
   for (const LoweredObject& lo : lowered_.objects) {
-    if (index != lo.transformBinding || value.size() != 16) continue;
-    dualc::Mat4 localFromWorld;
-    for (int i = 0; i < 4; ++i)
-      for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = value[std::size_t(i * 4 + j)];
-    const dualc::BBox w = worldBox(lo.localBounds, localFromWorld.inverseRigid());
-    const std::vector<float> boxMin{float(w.min.x), float(w.min.y), float(w.min.z)};
-    const std::vector<float> boxMax{float(w.max.x), float(w.max.y), float(w.max.z)};
-    viewport_->setParameter(lo.boxMinBinding, boxMin);
-    viewport_->setParameter(lo.boxMaxBinding, boxMax);
-    parameters_->showValue(lo.boxMinBinding, boxMin);
-    parameters_->showValue(lo.boxMaxBinding, boxMax);
-  }
-  // The doc on screen, and the one compiling (carryValues reads its flags).
-  for (const LoweredObject& lo : lowered_.objects) {
-    for (Doc* doc : {&doc_, pending_ ? &pending_->doc : nullptr}) {
-      SceneObject* o = doc ? doc->scene.find(lo.id) : nullptr;
-      if (!o) continue;
-      if (index == lo.visibleBinding && value.size() == 1)
-        o->visible = value[0] > 0.5f;
-      else if (index == lo.colourBinding && value.size() == 3)
-        o->colour = {value[0], value[1], value[2]};
+    if (index < lo.firstBinding || index >= lo.endBinding) continue;
+    if (index == lo.transformBinding && value.size() == 16) {
+      dualc::Mat4 localFromWorld;
+      for (int i = 0; i < 4; ++i)
+        for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = value[std::size_t(i * 4 + j)];
+      document_.setTransform(lo.id, localFromWorld.inverseRigid());
+    } else if (index == lo.visibleBinding && value.size() == 1) {
+      document_.setVisible(lo.id, value[0] > 0.5f);
+    } else if (index == lo.colourBinding && value.size() == 3) {
+      document_.setColour(lo.id, {value[0], value[1], value[2]});
+    } else if (index != lo.boxMinBinding && index != lo.boxMaxBinding) {
+      const fg::UniformBinding& b = viewport_->scene().bindings[std::size_t(index)];
+      document_.setParameter(lo.id, {b.nodePointer, b.paramKey}, std::move(value), b.value);
     }
-    if (const SceneObject* o = doc_.scene.find(lo.id)) {
-      if (index == lo.visibleBinding && value.size() == 1)
-        objects_->setObjectVisible(lo.id, o->visible);
-      else if (index == lo.colourBinding && value.size() == 3)
-        objects_->setObjectColour(lo.id, o->colour);
-    }
+    return;
   }
 }
 
@@ -477,7 +549,8 @@ void MainWindow::watch() {
   if (!watcher_.files().isEmpty()) watcher_.removePaths(watcher_.files());
   if (!watcher_.directories().isEmpty()) watcher_.removePaths(watcher_.directories());
   QStringList files;
-  for (const auto& [id, file] : latest().files) files << file;
+  for (const SceneObject& o : document_.scene().objects())
+    if (!o.file.isEmpty()) files << o.file;
   for (const auto& w : waiting_) files << w.first;
   files.removeDuplicates();
   for (const QString& file : files) {
@@ -493,10 +566,6 @@ void MainWindow::watch() {
 // one load attempt. An object's file replaces its graph; a waiting file that
 // now parses is opened or added.
 void MainWindow::fileEvent() {
-  Doc doc = latest();
-  std::set<int> fresh;
-  QString loaded;
-  bool frame = false;
   std::set<QString> seen;
   const auto reread = [&](const QString& file, std::optional<fg::GraphNode>* graph) {
     if (file.startsWith(':') || !seen.insert(file).second) return false;
@@ -521,13 +590,20 @@ void MainWindow::fileEvent() {
     return true;
   };
 
+  // What changed, read first; then one command (a macro), one apply.
+  std::vector<std::pair<int, fg::GraphNode>> reloads;
+  std::vector<std::pair<QString, fg::GraphNode>> adds;
+  std::optional<std::pair<QString, fg::GraphNode>> open;
+  std::set<int> fresh;
+  QString loaded;
   std::map<QString, std::vector<int>> byFile;
-  for (const auto& [id, file] : doc.files) byFile[file].push_back(id);
+  for (const SceneObject& o : document_.scene().objects())
+    if (!o.file.isEmpty()) byFile[o.file].push_back(o.id);
   for (const auto& [file, ids] : byFile) {
     std::optional<fg::GraphNode> graph;
     if (!reread(file, &graph)) continue;
     for (int id : ids) {
-      doc.scene.find(id)->graph = *graph;
+      reloads.emplace_back(id, *graph);
       fresh.insert(id);
     }
     loaded = file;
@@ -535,14 +611,33 @@ void MainWindow::fileEvent() {
   for (const auto& [file, replace] : std::vector<std::pair<QString, bool>>(waiting_)) {
     std::optional<fg::GraphNode> graph;
     if (!reread(file, &graph)) continue;
-    if (replace) doc = Doc{};
-    const int id =
-        doc.scene.add(QFileInfo(file).fileName(), std::move(*graph), graphMeshDir(file)).id;
-    doc.files[id] = file;
+    // An open replaces the scene, and whatever came before it.
+    if (replace) {
+      open.emplace(file, std::move(*graph));
+      adds.clear();
+    } else {
+      adds.emplace_back(file, std::move(*graph));
+    }
     loaded = file;
-    frame = true;
   }
-  if (!loaded.isEmpty()) apply(std::move(doc), frame, loaded, true, fresh);
+  if (loaded.isEmpty()) return;
+  const auto object = [](Scene& scene, const QString& file, fg::GraphNode graph) {
+    scene.add(QFileInfo(file).fileName(), std::move(graph), graphMeshDir(file)).file = file;
+  };
+  if (open) {
+    Scene scene;
+    object(scene, open->first, std::move(open->second));
+    for (auto& [file, graph] : adds) object(scene, file, std::move(graph));
+    next_ = ApplyContext{true, loaded, true, {}, {}, true};
+    document_.reset(std::move(scene));
+    return;
+  }
+  next_ = ApplyContext{!adds.empty(), loaded, true, fresh, {}, false};
+  document_.beginMacro(QString("Reload %1").arg(QFileInfo(loaded).fileName()));
+  for (auto& [id, graph] : reloads) document_.replaceGraph(id, std::move(graph));
+  for (auto& [file, graph] : adds)
+    document_.addObject(QFileInfo(file).fileName(), std::move(graph), graphMeshDir(file), file);
+  document_.endMacro();
 }
 
 void MainWindow::reportError(const QString& file, const QString& error) {

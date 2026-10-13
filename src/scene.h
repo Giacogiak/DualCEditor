@@ -6,7 +6,9 @@
 #include <QString>
 
 #include <array>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 // The editor's scene: a list of objects, each a field graph placed in the
@@ -19,11 +21,23 @@
 using SceneColour = std::array<float, 3>;
 inline constexpr SceneColour kDualCBase = {0.80f, 0.82f, 0.86f};
 
+// A parameter edit's key: the node's pointer and the param key of its
+// binding (UniformBinding::nodePointer, paramKey).
+using ParamKey = std::pair<std::string, std::string>;
+
 struct SceneObject {
   int id = 0;  // permanent within its Scene, never reused; names its uniforms
   QString name;
   dce::fieldgraph::GraphNode graph;
   QString meshDir;  // folder relative mesh paths resolve against first
+  QString file;     // the graph file it was read from and is watched; empty for none
+  // Parameter edits: uniform values that replace what the graph compiles to,
+  // keyed by binding. A uniform is not always a graph param (angleRad, a
+  // default), so the edit is kept beside the graph, not written into it.
+  std::map<ParamKey, std::vector<float>> edits;
+  // The objects an operation made this one from, in operand order; empty for
+  // an object read from a file (docs/design/04-scene-model.md).
+  std::vector<int> operands;
   // worldFromLocal. Rigid only: DualC's `transform` node inverts it with
   // Mat4::inverseRigid.
   dualc::Mat4 transform = dualc::Mat4::identity();
@@ -36,10 +50,16 @@ class Scene {
   // Append an object with the next id, visible, coloured by sceneColourFor.
   SceneObject& add(QString name, dce::fieldgraph::GraphNode graph, QString meshDir = {});
   bool remove(int id);
+  // Put `object` back at `index` (clamped), keeping its id: undo of a remove.
+  void insert(SceneObject object, int index);
+  // The position of object `id` in scene order, -1 when absent.
+  int indexOf(int id) const;
   SceneObject* find(int id);
   const SceneObject* find(int id) const;
   const std::vector<SceneObject>& objects() const { return objects_; }
   bool isEmpty() const { return objects_.empty(); }
+  // The id the next add takes. Ids only grow, across undo too.
+  int nextId() const { return nextId_; }
 
  private:
   std::vector<SceneObject> objects_;
@@ -115,6 +135,11 @@ bool isCostlyObject(const dce::fieldgraph::GraphNode& graph);
 // Throws dce::fieldgraph::GraphError naming the object on the first object
 // that does not compile, or when the scene is empty.
 LoweredScene lowerScene(const Scene& scene, bool cull = true);
+
+// The binding values of `lowered` that object `o`'s edits replace: set to
+// the edit where a binding of the object's graph has its key and size.
+// lowerScene does this; it is public for the uniform pushes of the window.
+void applyEdits(LoweredScene& lowered, const SceneObject& o);
 
 // The fragment shader for a GlslScene: DualC's assembleTraceShader, and when
 // the scene is a lowered one (it defines sceneColor) the framework's fixed

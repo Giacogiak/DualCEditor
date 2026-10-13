@@ -66,6 +66,10 @@ two operations without copying it.
 
 ## E-25 — Undo and redo
 **Trigger:** P03 (scene model).
+**Closed (P03.1, 2026-10-13).** Every scene edit is a command on a `QUndoStack`: add,
+remove, rename, move, show, recolour, parameter edit, reload, operation. Undo and redo
+restore the exact scene, checked without GL by `tests/scene_history_test.cpp`. The model is
+`../design/04-scene-model.md`.
 
 ## E-26 — Shadows and ambient occlusion
 Not in scope (E-03). **Trigger:** the owner asks for them after P02.

@@ -9,6 +9,7 @@
 namespace {
 
 constexpr int kIdRole = Qt::UserRole;
+constexpr int kNameRole = Qt::UserRole + 1;  // the name the row was given
 
 QIcon swatch(const SceneColour& colour) {
   QPixmap pixmap(16, 16);
@@ -23,7 +24,16 @@ ObjectsPanel::ObjectsPanel(QWidget* parent) : QListWidget(parent) {
   setUniformItemSizes(true);
   connect(this, &QListWidget::itemChanged, this, [this](QListWidgetItem* item) {
     if (updating_) return;
-    emit visibilityToggled(item->data(kIdRole).toInt(), item->checkState() == Qt::Checked);
+    const int id = item->data(kIdRole).toInt();
+    if (item->text() != item->data(kNameRole).toString()) {
+      const QString name = item->text();
+      updating_ = true;
+      item->setText(item->data(kNameRole).toString());  // until the window says so
+      updating_ = false;
+      emit renameRequested(id, name);
+      return;
+    }
+    emit visibilityToggled(id, item->checkState() == Qt::Checked);
   });
   connect(this, &QListWidget::itemSelectionChanged, this, [this] {
     if (!updating_) emit selectionMoved(selectedId());
@@ -44,7 +54,9 @@ void ObjectsPanel::setObjects(const std::vector<SceneObject>& objects) {
   for (const SceneObject& o : objects) {
     auto* item = new QListWidgetItem(swatch(o.colour), o.name, this);
     item->setData(kIdRole, o.id);
-    item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
+    item->setData(kNameRole, o.name);
+    item->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable |
+                   Qt::ItemIsEditable);
     item->setCheckState(o.visible ? Qt::Checked : Qt::Unchecked);
     item->setToolTip(QString("object %1").arg(o.id));
     if (o.id == selected) item->setSelected(true);

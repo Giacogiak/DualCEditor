@@ -106,6 +106,18 @@ bool Scene::remove(int id) {
   return true;
 }
 
+void Scene::insert(SceneObject object, int index) {
+  index = std::clamp(index, 0, int(objects_.size()));
+  nextId_ = std::max(nextId_, object.id + 1);
+  objects_.insert(objects_.begin() + index, std::move(object));
+}
+
+int Scene::indexOf(int id) const {
+  for (std::size_t i = 0; i < objects_.size(); ++i)
+    if (objects_[i].id == id) return int(i);
+  return -1;
+}
+
 SceneObject* Scene::find(int id) {
   for (SceneObject& o : objects_)
     if (o.id == id) return &o;
@@ -249,6 +261,7 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
       s.meshes.push_back(std::move(m));
     }
     out.objects.push_back(lo);
+    applyEdits(out, o);
   }
   sdf << "  return d;\n}\n";
   colour << "  if (" << kSelectedUniform << " > 0.5)\n    c = abs(id - " << kSelectedUniform
@@ -257,6 +270,21 @@ LoweredScene lowerScene(const Scene& scene, bool cull) {
   src << "uniform float " << kSelectedUniform << ";\n";
   s.generatedSource = src.str() + sdf.str() + colour.str();
   return out;
+}
+
+void applyEdits(LoweredScene& lowered, const SceneObject& o) {
+  if (o.edits.empty()) return;
+  const std::string own = "/objects/" + std::to_string(o.id);
+  for (const LoweredObject& lo : lowered.objects) {
+    if (lo.id != o.id) continue;
+    for (int i = lo.firstBinding; i < lo.endBinding && i < int(lowered.scene.bindings.size());
+         ++i) {
+      fg::UniformBinding& b = lowered.scene.bindings[std::size_t(i)];
+      if (b.nodePointer == own) continue;  // transform, visible, colour, box
+      const auto e = o.edits.find({b.nodePointer, b.paramKey});
+      if (e != o.edits.end() && e->second.size() == b.value.size()) b.value = e->second;
+    }
+  }
 }
 
 std::string assembleSceneShader(const fg::GlslScene& scene) {

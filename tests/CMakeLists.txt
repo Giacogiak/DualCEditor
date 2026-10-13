@@ -80,6 +80,13 @@ target_link_libraries(scene_test PRIVATE dualceditor_core)
 dualceditor_target_options(scene_test)
 add_test(NAME scene COMMAND scene_test)
 
+# The undo history without GL: a sequence of commands undone to the empty
+# scene and redone, the same scene and the same lowered shader at every step.
+add_executable(scene_history_test scene_history_test.cpp)
+target_link_libraries(scene_history_test PRIVATE dualceditor_core)
+dualceditor_target_options(scene_history_test)
+add_test(NAME scene_history COMMAND scene_history_test)
+
 # A lowered scene on GL, off-screen: one object renders the graph's own image,
 # three objects render in their own colours, and hiding, showing and
 # recolouring compile and link nothing.
