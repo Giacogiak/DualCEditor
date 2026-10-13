@@ -4,6 +4,7 @@
 #include "graph_scene.h"
 #include "objects_panel.h"
 #include "parameter_panel.h"
+#include "scene_file.h"
 #include "viewport.h"
 
 #include <QAction>
@@ -27,18 +28,21 @@
 #include <algorithm>
 #include <set>
 #include <stdexcept>
+#include <tuple>
 #include <utility>
 
 namespace {
 
 namespace fg = dce::fieldgraph;
 
-// The local graph files a drag carries, in order.
+// The local graph and scene files a drag carries, in order.
 QStringList droppedGraphs(const QMimeData* mime) {
   QStringList out;
   if (!mime || !mime->hasUrls()) return out;
   for (const QUrl& url : mime->urls())
-    if (url.isLocalFile() && isGraphFileName(url.toLocalFile())) out << url.toLocalFile();
+    if (url.isLocalFile() &&
+        (isGraphFileName(url.toLocalFile()) || isSceneFileName(url.toLocalFile())))
+      out << url.toLocalFile();
   return out;
 }
 
@@ -99,6 +103,14 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   QAction* open = fileMenu->addAction("&Open...", this, &MainWindow::openDialog);
   open->setShortcut(QKeySequence::Open);
   fileMenu->addAction("&Add...", this, &MainWindow::addDialog);
+  fileMenu->addSeparator();
+  QAction* save = fileMenu->addAction("&Save Scene", this, [this] {
+    if (scenePath_.isEmpty()) return saveDialog();
+    saveScene(scenePath_);
+  });
+  save->setShortcut(QKeySequence::Save);
+  QAction* saveAs = fileMenu->addAction("Save Scene &As...", this, &MainWindow::saveDialog);
+  saveAs->setShortcut(QKeySequence::SaveAs);
   fileMenu->addSeparator();
   QAction* quit = fileMenu->addAction("&Quit", this, &QWidget::close);
   quit->setShortcut(QKeySequence::Quit);
@@ -174,6 +186,7 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
 }
 
 void MainWindow::openFile(const QString& path) {
+  if (isSceneFileName(path)) return openScene(path);
   file_ = absolute(path);
   if (std::optional<fg::GraphNode> graph = readGraph(file_)) {
     Scene scene;
@@ -186,7 +199,45 @@ void MainWindow::openFile(const QString& path) {
   watch();
 }
 
+void MainWindow::openScene(const QString& path) {
+  file_ = absolute(path);
+  SceneLoad load = loadSceneFile(file_);
+  if (!load.scene) return reportError(file_, load.error);
+  // The objects' files as they are now: only a later change reloads them,
+  // so the scene's own graphs are what shows.
+  for (const SceneObject& o : load.scene->objects()) {
+    if (o.file.isEmpty()) continue;
+    QFile f(o.file);
+    if (f.open(QIODevice::ReadOnly)) texts_[o.file] = f.readAll();
+  }
+  scenePath_ = file_;
+  waiting_.clear();
+  next_ = ApplyContext{true, file_, true, {}, {}, true};
+  document_.reset(std::move(*load.scene));
+  watch();
+}
+
+bool MainWindow::saveScene(const QString& path) {
+  const QString target = absolute(path);
+  const QString error = saveSceneFile(document_.scene(), target);
+  const QString name = QFileInfo(target).fileName();
+  if (!error.isEmpty()) {
+    statusBar()->showMessage(QString("Not saved: %1").arg(error));
+    log(QString("%1: not saved: %2").arg(target, error));
+    return false;
+  }
+  scenePath_ = target;
+  statusBar()->showMessage(
+      QString("Saved %1: %2 objects").arg(name).arg(document_.scene().objects().size()));
+  log(QString("saved %1").arg(target));
+  return true;
+}
+
 void MainWindow::addFile(const QString& path) {
+  if (isSceneFileName(path)) {
+    reportError(path, "a scene is opened, not added: File > Open");
+    return;
+  }
   file_ = absolute(path);
   if (std::optional<fg::GraphNode> graph = readGraph(file_)) {
     next_ = ApplyContext{true, file_, true, {}, {{file_, false}}, false};
@@ -351,8 +402,22 @@ void MainWindow::openDialog() {
   const QString start =
       file_.isEmpty() || file_.startsWith(':') ? QString() : QFileInfo(file_).absolutePath();
   const QString path = QFileDialog::getOpenFileName(
-      this, "Open graph", start, "Field graphs (*.json *.fld);;All files (*)");
+      this, "Open scene or graph", start,
+      "Scenes and field graphs (*.dcscene *.json *.fld);;Scenes (*.dcscene);;"
+      "Field graphs (*.json *.fld);;All files (*)");
   if (!path.isEmpty()) openFile(path);
+}
+
+void MainWindow::saveDialog() {
+  QString start = scenePath_;
+  if (start.isEmpty() && !file_.isEmpty() && !file_.startsWith(':'))
+    start = QFileInfo(file_).absoluteDir().filePath(QFileInfo(file_).completeBaseName() +
+                                                    ".dcscene");
+  QString path = QFileDialog::getSaveFileName(this, "Save scene", start,
+                                              "Scenes (*.dcscene);;All files (*)");
+  if (path.isEmpty()) return;
+  if (!isSceneFileName(path)) path += ".dcscene";
+  saveScene(path);
 }
 
 void MainWindow::addDialog() {
@@ -591,7 +656,7 @@ void MainWindow::fileEvent() {
   };
 
   // What changed, read first; then one command (a macro), one apply.
-  std::vector<std::pair<int, fg::GraphNode>> reloads;
+  std::vector<std::tuple<int, fg::GraphNode, QString>> reloads;
   std::vector<std::pair<QString, fg::GraphNode>> adds;
   std::optional<std::pair<QString, fg::GraphNode>> open;
   std::set<int> fresh;
@@ -603,7 +668,7 @@ void MainWindow::fileEvent() {
     std::optional<fg::GraphNode> graph;
     if (!reread(file, &graph)) continue;
     for (int id : ids) {
-      reloads.emplace_back(id, *graph);
+      reloads.emplace_back(id, *graph, graphMeshDir(file));
       fresh.insert(id);
     }
     loaded = file;
@@ -634,7 +699,8 @@ void MainWindow::fileEvent() {
   }
   next_ = ApplyContext{!adds.empty(), loaded, true, fresh, {}, false};
   document_.beginMacro(QString("Reload %1").arg(QFileInfo(loaded).fileName()));
-  for (auto& [id, graph] : reloads) document_.replaceGraph(id, std::move(graph));
+  for (auto& [id, graph, meshDir] : reloads)
+    document_.replaceGraph(id, std::move(graph), std::move(meshDir));
   for (auto& [file, graph] : adds)
     document_.addObject(QFileInfo(file).fileName(), std::move(graph), graphMeshDir(file), file);
   document_.endMacro();
@@ -685,10 +751,17 @@ void MainWindow::dragMoveEvent(QDragMoveEvent* event) {
   event->acceptProposedAction();
 }
 
-// Every graph file the drop carries becomes one more object.
+// Every graph file the drop carries becomes one more object. A scene file
+// opens, replacing the scene, and the graphs dropped with it are added to it.
 void MainWindow::dropEvent(QDropEvent* event) {
   const QStringList paths = droppedGraphs(event->mimeData());
   if (paths.isEmpty()) return event->ignore();
   event->acceptProposedAction();
-  for (const QString& path : paths) addFile(path);
+  for (const QString& path : paths)
+    if (isSceneFileName(path)) {
+      openScene(path);
+      break;
+    }
+  for (const QString& path : paths)
+    if (!isSceneFileName(path)) addFile(path);
 }

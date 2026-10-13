@@ -3,6 +3,7 @@
 #include "graph_file.h"
 #include "main_window.h"
 #include "scene.h"
+#include "scene_file.h"
 #include "snapshot.h"
 
 #include <QApplication>
@@ -31,11 +32,22 @@ bool hasFlag(int argc, char* argv[], const char* flag) {
   return false;
 }
 
-// The graphs as a scene of one object each, lowered to one shader. On an
-// error it prints the reason and returns false.
+// The graphs as a scene of one object each, or one .dcscene alone, lowered to
+// one shader. On an error it prints the reason and returns false.
 bool lowerGraphs(const QStringList& paths, dce::fieldgraph::GlslScene* out) {
   Scene scene;
   for (const QString& path : paths) {
+    if (isSceneFileName(path)) {
+      SceneLoad load = loadSceneFile(path);
+      if (paths.size() != 1 || !load.scene) {
+        std::fprintf(stderr, "DualCEditor: %s\n",
+                     paths.size() != 1 ? "a .dcscene is drawn alone, with no graphs"
+                                       : qPrintable(load.error));
+        return false;
+      }
+      scene = std::move(*load.scene);
+      break;
+    }
     GraphParse parse = parseGraphFile(path);
     if (!parse.graph) {
       std::fprintf(stderr, "DualCEditor: %s\n", qPrintable(parse.error));
@@ -110,8 +122,8 @@ int main(int argc, char* argv[]) {
   parser.addOption(benchFramesOption);
   parser.addPositionalArgument(
       "graph",
-      "Field graph to open (.json or .fld shorthand). Default: gyroid_box.json. "
-      "Several make a scene of one object per graph.",
+      "Field graph to open (.json or .fld shorthand), or a .dcscene. Default: "
+      "gyroid_box.json. Several graphs make a scene of one object per graph.",
       "[graph...]");
   parser.process(*app);
   const QStringList graphs = parser.positionalArguments();
@@ -127,7 +139,8 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  if (parser.isSet(snapshotOption) && graphs.size() > 1) {
+  const bool sceneFile = graphs.size() > 1 || isSceneFileName(graph);
+  if (parser.isSet(snapshotOption) && sceneFile) {
     dce::fieldgraph::GlslScene scene;
     if (!lowerGraphs(graphs, &scene)) return 2;
     return renderSnapshot(scene, parser.value(snapshotOption), 800, 600);
@@ -154,7 +167,7 @@ int main(int argc, char* argv[]) {
       std::fprintf(stderr, "DualCEditor: --bench-size needs WxH and --bench-frames N >= 1\n");
       return 1;
     }
-    if (graphs.size() > 1) {
+    if (sceneFile) {
       dce::fieldgraph::GlslScene scene;
       if (!lowerGraphs(graphs, &scene)) return 2;
       return runBench(std::move(scene), bench);

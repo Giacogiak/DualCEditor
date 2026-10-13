@@ -15,7 +15,7 @@ field's own bounds padded by 5%.
 
 | Flag | Default | Effect |
 |---|---|---|
-| `graph` (positional) | `gyroid_box.json` | The graphs to open. Each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window the first is opened and the others added (*Objects* below). In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
+| `graph` (positional) | `gyroid_box.json` | The graphs to open. Each graph becomes one object of a scene, in the order given, lowered to one shader (*Several graphs* below). In the window the first is opened and the others added (*Objects* below). A `.dcscene` opens that scene (*Scene files* below); `--snapshot` and `--bench` take it alone, with no graphs after it. In the window, a graph that does not load still opens the window, with the error in the status bar and the log, and is watched, so fixing it renders it. |
 | `--snapshot PATH` | off | Render one 800×600 frame of `graph` (default view) off-screen to the PNG `PATH`, then exit. Opens no window. |
 | `--preview-scale S` | `0.5` | Resolution factor while the view moves. The view is traced at `S` × the window's pixels, then upscaled linearly. It returns to full resolution 0.18 s after the last input. Clamped to 0.1 – 1. `1` turns the preview off. A value that is not a number exits 1. Same flag and default as `dualc_field_view`. |
 | `--bench` | off | Time `graph` while orbiting and when settled, print one JSON line on stdout, and exit. See *Measurement run*. Vsync is off for the run. |
@@ -74,10 +74,10 @@ printf 'translate(by=[2,0,0],sphere(radius=0.8))' > c.fld
 
 | Way | Behaviour |
 |---|---|
-| `File ▸ Open…` (`Ctrl+O`, the platform's Open shortcut) | File dialog filtered on `*.json *.fld`, with `All files` as the other filter. Starts in the last file's folder. **Replaces** the scene with one object. |
+| `File ▸ Open…` (`Ctrl+O`, the platform's Open shortcut) | File dialog filtered on `*.dcscene *.json *.fld`, then on scenes only, graphs only, and `All files`. Starts in the last file's folder. A graph **replaces** the scene with one object; a `.dcscene` replaces it with the saved scene (*Scene files* below). |
 | `File ▸ Add…` (no shortcut) | The same dialog, several files allowed. **Adds** one object per file. |
 | The `graph` arguments | The first is opened, the others added. |
-| Drop files on the window | Accepted when the drag carries a local file ending in `.json` or `.fld` (any case). Other files are refused: the cursor shows no drop. **Adds** one object per graph file the drag carries, in order, to the scene on screen (the default `gyroid_box.json` included: delete it from the Objects dock). A drop anywhere on the window counts, the viewport, the docks and the log included. |
+| Drop files on the window | Accepted when the drag carries a local file ending in `.json`, `.fld` or `.dcscene` (any case). Other files are refused: the cursor shows no drop. A `.dcscene` (the first, if several) **opens**, replacing the scene. Then the drop **adds** one object per graph file the drag carries, in order, to the scene on screen (the default `gyroid_box.json` included: delete it from the Objects dock). A drop anywhere on the window counts, the viewport, the docks and the log included. |
 
 Opening or adding frames the camera on the scene's trace box (the union of every object's
 box), like `F`. The window title is `<object name> - DualCEditor` with one object,
@@ -85,6 +85,33 @@ box), like `F`. The window title is `<object name> - DualCEditor` with one objec
 
 A relative mesh path (`mesh(path="cube.obj")`) is looked up beside the graph file first,
 then in the working directory. `dualc_field_view` looks only in the working directory.
+
+### Scene files
+
+A scene is saved to a `.dcscene` file (`../design/05-dcscene-format.md`). It holds every
+object: its graph, name, transform, visible flag, colour, parameter edits and operands, and
+the bytes of every mesh its graph reads. It names no absolute path, so it opens from any
+folder, on any machine.
+
+| Way | Behaviour |
+|---|---|
+| `File ▸ Save Scene` (`Ctrl+S`, the platform's Save shortcut) | Writes the scene to the `.dcscene` last opened or saved. With none yet, asks for a name, as `Save Scene As…`. |
+| `File ▸ Save Scene As…` (`Ctrl+Shift+S`, the platform's Save As shortcut) | File dialog filtered on `*.dcscene`. Starts at the last scene file, or beside the last graph with its name and `.dcscene`. A name with no `.dcscene` gets it. |
+| `File ▸ Open…`, a drop, the first argument | Opens a `.dcscene`: it **replaces** the scene and frames it. The undo history is cleared. |
+
+The status bar says `Saved <name>: N objects`; the log names the file. A save that fails
+says `Not saved: <reason>` (`cannot read mesh cube.obj of object 2 (mesh.fld): …`), and the
+file on disk is left as it was.
+
+A file that is not a scene, has no version or has a newer one is refused. The status bar
+and the log say why, and the scene stays:
+`future.dcscene is scene version 2, written by a newer DualCEditor; this DualCEditor reads
+version 1`. `File ▸ Add…` refuses a `.dcscene`: a scene is opened, not added.
+
+An object's graph file, named relative to the scene file, is watched again when it is still
+there. Only a later change to it reloads it: until then the object shows the graph saved in
+the scene, with its parameter edits. The scene's meshes are extracted to a temporary folder
+that is removed when the editor exits.
 
 ### Reload on save
 
@@ -134,7 +161,7 @@ the pointer is a character offset.
 
 | Part | Content |
 |---|---|
-| `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Quit` (`Ctrl+Q`, the platform's Quit shortcut). |
+| `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
 | `View` menu | `Objects`, `Parameters` and `Log`: show or hide each dock. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |

@@ -37,6 +37,10 @@ Whichever is chosen, the reader must check `version` (DualC's graph reader ignor
 the run to continue without stopping and delegated the open decisions to the plan's
 recommendations.
 
+**Implemented (P03 T2, 2026-10-13):** `../design/05-dcscene-format.md`. Mesh entries keep
+their file's suffix (`meshes/0.obj`, not `.bin`), so DualC's file reader reads them; no
+baked `grids/` are written.
+
 ## E-09 — Mesh import formats and readers
 
 geometry-central (already linked through DualC) reads OBJ and PLY. STL and 3MF are what

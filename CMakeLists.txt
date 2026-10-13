@@ -71,6 +71,8 @@ add_library(dualceditor_core STATIC
   src/pick.h
   src/scene_document.cpp
   src/scene_document.h
+  src/scene_file.cpp
+  src/scene_file.h
   src/parameter_panel.cpp
   src/parameter_panel.h
   src/scene.cpp

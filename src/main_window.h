@@ -32,6 +32,8 @@ class Viewport;
 // stack every change goes through (Edit > Undo, Redo). File > Open and the first command-line
 // graph replace the scene with one object (openFile); a drop of .json or .fld
 // files, File > Add and further command-line graphs add objects (addFile).
+// File > Save Scene writes the scene to a .dcscene, which File > Open, a drop
+// or the command line opens again (openScene).
 // Each object's file is watched and reloads when its text changes on disk,
 // keeping the camera. A field-graph error or a shader error goes to the status
 // bar and the log, with its JSON pointer, and the last good scene stays on
@@ -52,7 +54,18 @@ class MainWindow : public QMainWindow {
   // Open `path` (a file or a Qt resource) as a scene of one object, frame it
   // and watch it. On an error the file is still watched, so the save that
   // fixes it opens it, but the previous scene stays on screen.
+  // A .dcscene opens as openScene does.
   void openFile(const QString& path);
+  // Open the scene file `path` (docs/design/05-dcscene-format.md), replacing
+  // the scene and clearing the undo history, and frame it. Each object's file,
+  // when it is still there, is watched: a later change reloads it. An error
+  // (not a scene, a newer version) goes to the status bar and the log.
+  void openScene(const QString& path);
+  // Save the scene being edited (the document, not the one on screen) to
+  // `path`, which File > Save then writes again. False, reported, on an error.
+  bool saveScene(const QString& path);
+  // The scene file last opened or saved, empty for none.
+  const QString& scenePath() const { return scenePath_; }
   // Add `path` as one more object, framing the whole scene; on an error as
   // openFile, and the save that fixes it adds it.
   void addFile(const QString& path);
@@ -143,6 +156,7 @@ class MainWindow : public QMainWindow {
 
   void openDialog();
   void addDialog();
+  void saveDialog();
   // Read and parse `path`. None, reported, on an error.
   std::optional<dce::fieldgraph::GraphNode> readGraph(const QString& path);
   // The document changed: push uniforms, or rebuild the shader.
@@ -192,6 +206,7 @@ class MainWindow : public QMainWindow {
   std::optional<ScenePicker> picker_;
   int selected_ = 0;
   QString file_;
+  QString scenePath_;
   // Files that did not load: watched, and opened (true) or added (false) by
   // the save that fixes them.
   std::vector<std::pair<QString, bool>> waiting_;

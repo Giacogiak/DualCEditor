@@ -30,7 +30,7 @@ without a context (`tests/scene_history_test.cpp`).
 | Show or hide | `SetField<visible>` | no: one uniform |
 | Recolour | `SetField<colour>` | no: one uniform |
 | Parameter edit | `SetParameter`: the edit before (or none) and the uniform's value before; consecutive edits of one parameter merge into one step | no: one uniform |
-| A file reloaded | `ReplaceGraph`: the old graph and its edits; the new graph has none | yes |
+| A file reloaded | `ReplaceGraph`: the old graph, its edits and its `meshDir`; the new graph has none, and resolves meshes beside its file | yes |
 | An operation | `ApplyOperation`: adds the result after its last operand and hides the operands that were shown | yes |
 
 A reload of several files is one macro (`SceneDocument::beginMacro`), so one step and one
@@ -45,8 +45,8 @@ an undo takes a new one. `Scene::insert` puts an object back at its index with i
 A uniform is not always a graph parameter: DualC binds `angleRad` for an angle given in
 degrees, binds defaults the graph never wrote, and a `mat4` for `translate` and `rotate`.
 So an edit is kept as the uniform's value, keyed by the binding, and `lowerScene` puts it
-into the lowered bindings (`applyEdits`). The graph stays as read. The values still do not
-reach the file (E-08's `.dcscene` will save them, P03 T2). A reload drops them, as before;
+into the lowered bindings (`applyEdits`). The graph stays as read. The graph file never
+holds them; the `.dcscene` does (`05-dcscene-format.md`). A reload drops them, as before;
 undoing the reload brings them back.
 
 ### Changes and the window

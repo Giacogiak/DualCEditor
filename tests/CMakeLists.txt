@@ -126,3 +126,14 @@ add_test(NAME async_compile
   COMMAND async_compile_test
           ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)
 set_tests_properties(async_compile PROPERTIES SKIP_RETURN_CODE 77)
+
+# The .dcscene file (P03 T2, E-08), GL-free: a save then load gives the same
+# objects, field values at sample points, shader, uniform values and mesh
+# bytes; moved to another folder with its sources gone it still loads; a
+# future version, no version or no zip is refused with a message.
+add_executable(scene_file_test scene_file_test.cpp)
+target_link_libraries(scene_file_test PRIVATE dualceditor_core)
+dualceditor_target_options(scene_file_test)
+add_test(NAME scene_file
+  COMMAND scene_file_test
+          ${DUALCEDITOR_DUALC_SOURCE_DIR}/examples/samples/gyroid_box.json)

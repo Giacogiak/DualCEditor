@@ -125,29 +125,35 @@ class SetParameter : public QUndoCommand {
 
 class ReplaceGraph : public QUndoCommand {
  public:
-  ReplaceGraph(SceneDocument* doc, const SceneObject& o, fg::GraphNode graph)
+  ReplaceGraph(SceneDocument* doc, const SceneObject& o, fg::GraphNode graph, QString meshDir)
       : QUndoCommand(QString("Reload %1").arg(o.name)),
         doc_(doc),
         id_(o.id),
         beforeGraph_(o.graph),
         beforeEdits_(o.edits),
-        after_(std::move(graph)) {}
-  void redo() override { set(after_, {}); }
-  void undo() override { set(beforeGraph_, beforeEdits_); }
+        beforeMeshDir_(o.meshDir),
+        after_(std::move(graph)),
+        afterMeshDir_(meshDir.isEmpty() ? o.meshDir : std::move(meshDir)) {}
+  void redo() override { set(after_, {}, afterMeshDir_); }
+  void undo() override { set(beforeGraph_, beforeEdits_, beforeMeshDir_); }
 
  private:
-  void set(const fg::GraphNode& graph, const std::map<ParamKey, std::vector<float>>& edits) {
+  void set(const fg::GraphNode& graph, const std::map<ParamKey, std::vector<float>>& edits,
+           const QString& meshDir) {
     SceneObject* o = doc_->object(id_);
     if (!o) return;
     o->graph = graph;
     o->edits = edits;
+    o->meshDir = meshDir;
     doc_->touchGraph();
   }
   SceneDocument* doc_;
   int id_;
   fg::GraphNode beforeGraph_;
   std::map<ParamKey, std::vector<float>> beforeEdits_;
+  QString beforeMeshDir_;
   fg::GraphNode after_;
+  QString afterMeshDir_;
 };
 
 // The result is added after the last operand and the operands hidden; undo
@@ -295,10 +301,10 @@ void SceneDocument::setParameter(int id, const ParamKey& key, std::vector<float>
   push(new SetParameter(this, id, key, before, std::move(current), std::move(value)));
 }
 
-void SceneDocument::replaceGraph(int id, fg::GraphNode graph) {
+void SceneDocument::replaceGraph(int id, fg::GraphNode graph, QString meshDir) {
   const SceneObject* o = scene_.find(id);
   if (!o) return;
-  push(new ReplaceGraph(this, *o, std::move(graph)));
+  push(new ReplaceGraph(this, *o, std::move(graph), std::move(meshDir)));
 }
 
 int SceneDocument::applyOperation(const std::string& op,

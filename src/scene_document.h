@@ -64,8 +64,10 @@ class SceneDocument : public QObject {
   void setParameter(int id, const ParamKey& key, std::vector<float> value,
                     std::vector<float> current);
   // Replace object `id`'s graph (its file changed on disk). Its parameter
-  // edits go with the old graph, and come back with it on undo.
-  void replaceGraph(int id, dce::fieldgraph::GraphNode graph);
+  // edits go with the old graph, and come back with it on undo. A non-empty
+  // `meshDir` replaces the object's too: an object loaded from a .dcscene
+  // resolves meshes in the scene's extracted folder, its file beside itself.
+  void replaceGraph(int id, dce::fieldgraph::GraphNode graph, QString meshDir = {});
   // Group the edits until endMacro into one undo step, and one `changed`.
   void beginMacro(const QString& text);
   void endMacro();

@@ -356,6 +356,49 @@ int main(int argc, char* argv[]) {
     check(sameValues, "undo of a remove: the same uniforms and values");
   }
 
+  // A scene saved and opened again (P03 T2): the same objects, shader and
+  // uniform values, with no undo history; a drop opens it too, --snapshot
+  // draws it, and a file that is no scene is refused with a message.
+  {
+    quiet(vp);
+    QDir(tmp.path()).mkdir("saved");
+    const QString path = tmp.filePath("saved/window.dcscene");
+    check(w.saveScene(path) && w.scenePath() == path, "the window saves the scene");
+    const Scene before = w.scene();
+    const std::string source = vp.scene().generatedSource;
+    const auto bindings = vp.scene().bindings;
+    w.openFile(path);
+    check(nextLoad(w, 30000) == 1, "the saved scene opens");
+    quiet(vp);
+    bool same = w.scene().objects().size() == before.objects().size();
+    for (std::size_t i = 0; same && i < before.objects().size(); ++i)
+      same = w.scene().objects()[i].id == before.objects()[i].id &&
+             w.scene().objects()[i].name == before.objects()[i].name &&
+             w.scene().objects()[i].visible == before.objects()[i].visible;
+    check(same, "the opened scene has the saved objects");
+    check(vp.scene().generatedSource == source, "the opened scene: the same source");
+    bool sameValues = bindings.size() == vp.scene().bindings.size();
+    for (std::size_t i = 0; sameValues && i < bindings.size(); ++i)
+      sameValues = bindings[i].value == vp.scene().bindings[i].value;
+    check(sameValues, "the opened scene: the same uniform values");
+    check(!w.undoStack()->canUndo(), "opening a scene clears the undo history");
+    check(drop(w, path) && nextLoad(w, 30000) == 1, "a dropped .dcscene opens");
+    const QString png = tmp.filePath("scene.png");
+    const int code = runEditor(editor, {"--snapshot", png, path});
+    check(code == 0 || code == kExitSkip, "--snapshot draws a .dcscene");
+    const QString bad = tmp.filePath("saved/bad.dcscene");
+    write(bad, "not a zip");
+    int result = -1;
+    const QMetaObject::Connection c =
+        QObject::connect(&w, &MainWindow::loadFinished, [&](bool ok) { result = ok; });
+    w.openFile(bad);
+    runUntil([&] { return result != -1; }, 10000);
+    QObject::disconnect(c);
+    check(result == 0 && w.statusBar()->currentMessage().contains("not a scene file"),
+          "a file that is no scene is refused with a message");
+    check(w.scene().objects().size() == before.objects().size(), "and the scene stays");
+  }
+
   // A shader that does not link: sceneFailed, the scene and image stay.
   {
     const QImage before = vp.grabFramebuffer();
