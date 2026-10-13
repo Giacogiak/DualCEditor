@@ -184,7 +184,7 @@ the pointer is a character offset.
 
 | Part | Content |
 |---|---|
-| `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files*. |
+| `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Export Selected Object…` (`Ctrl+E`, greyed out with nothing selected), `Export Visible Scene…` (`Ctrl+Shift+E`), both greyed out while an export runs, `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files* and *Export*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
 | `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference` (one per DualC boolean, see *Operation list*), and the `Blend k` spin box of the smooth ones, greyed out with fewer than two objects selected (see *Booleans* below); `Fill with TPMS…` and `Fill with Lattice…`, greyed out with no object selected (see *Fills* below). No shortcut. |
 | `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
@@ -326,6 +326,30 @@ one is a length in mm. `ctest -R operations` fails when an op below is missing h
 
 The menu text is the token in title case (`smooth-union` gives `Smooth Union`). Both fill
 dialogs add `Keep the skin` (see *Fills*), which is the editor's, not an op parameter.
+
+## Export
+
+`File ▸ Export Selected Object…` (`Ctrl+E`, E for Export, the same on AZERTY) contours the
+selected object; `File ▸ Export Visible Scene…` (`Ctrl+Shift+E`) the union of the visible
+objects. Each object is posed in world mm and carries its parameter edits, so the file is
+what the viewport shows. The dialog (`../design/08-export.md`):
+
+| Field | Default | Effect |
+|---|---|---|
+| `File` + `Browse…` | The last export's folder and extension, else the scene file's folder (or Documents) and `.stl`; named after the object, or `scene` | The extension picks the format: `.stl` binary STL, `.3mf` 3MF (1 unit = 1 mm), `.obj` OBJ with per-vertex normals, case-insensitive. Any other extension greys out `Export`. |
+| `Format` | — | The format the extension names, or how to fix it. |
+| `Depth` | 7 (3–12) | DualC's octree depth: 2^depth cells across the bounds. Each level is about four times the triangles. |
+| `Estimate` | — | `about N triangles, M RAM, cell C mm`, from a coarse contour at depth min(depth − 1, 5) grown four times per level; RAM at DualC's 3 KiB per triangle of one contour (the whole mesh, or the busiest tile). On the P06 test case it was 0.89× the real count. The probe runs on the GUI thread, once per bounds and probe depth. |
+| `Bounds min / max` + `Reset` | The field's own bounds padded by 5% (the trace box) | The box DualC samples, x y z in mm. An empty box greys out `Export`. |
+| `Tiled, one tile in RAM` + `tile depth` | off; tile depth = depth − 2 (2 to depth − 1) | STL and 3MF only (greyed out for OBJ). DualC's streaming writer contours tile by tile, so peak RAM is one tile; seam vertices are duplicated, so the file is watertight for a slicer but not vertex-welded. The estimate then names the tiles per axis. Closes E-27. |
+
+`Export` starts the job on a worker thread. A window-modal progress dialog shows the stage
+(`Sampling`, `Contouring`, `Writing`, or `Tile i of n`) while the viewport keeps drawing.
+`Cancel` stops DualC at its next checkpoint: **no file is left**, not even a `.part`, and a
+file already at that path is untouched (DualC writes `<file>.part` and renames it only on
+success). The log then gets `export <file>: depth D in T ms: N triangles, watertight` (or
+the open and non-manifold edge counts DualC reports; a tiled export reports its tile depth),
+and an error goes to the status bar and the log.
 
 ## Undo and redo
 

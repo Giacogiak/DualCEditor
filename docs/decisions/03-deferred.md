@@ -77,6 +77,13 @@ Not in scope (E-03). **Trigger:** the owner asks for them after P02.
 ## E-27 — Tiled export for large lattices in the export dialog
 DualC's tiled STL export keeps peak memory at one tile. **Trigger:** P06.
 
+**Closed (P06.1, 2026-10-13).** The export dialog's `Tiled, one tile in RAM` writes STL
+through DualC's `writeFieldTiledStl` and 3MF through `writeFieldTiled3mf`, at a tile depth
+the user sets (default depth − 2). The `export` ctest checks that the tiled STL of a gyroid fill at
+depth 6, tile depth 4 (125 tiles) has the whole export's 288 732 triangles and is
+watertight once read back and welded. The estimate charges the busiest tile only
+(`../design/08-export.md`).
+
 ## E-28 — An interruptible settle
 The full-resolution frame is drawn in one draw on the GUI thread's context, so a drag that
 starts while it is in flight waits for it: up to about 390 ms on the tapered octet

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "gizmo.h"
+#include "mesh_export.h"
 #include "pick.h"
 #include "scene.h"
 #include "scene_document.h"
@@ -24,6 +25,7 @@ class QAction;
 class QDoubleSpinBox;
 class QLabel;
 class QPlainTextEdit;
+class ExportJob;
 class QProgressDialog;
 class ObjectsPanel;
 class ParameterPanel;
@@ -54,7 +56,8 @@ class MainWindow : public QMainWindow {
   static constexpr int kReloadDelayMs = 100;
 
   explicit MainWindow(float previewScale, QWidget* parent = nullptr);
-  // Cancels a Make Watertight still running and waits for its thread.
+  // Cancels a Make Watertight or an export still running and waits for its
+  // thread.
   ~MainWindow() override;
 
   // Open `path` (a file or a Qt resource) as a scene of one object, frame it
@@ -109,6 +112,17 @@ class MainWindow : public QMainWindow {
   // the volume hidden, the fill selected once on screen. Returns its id, 0 for
   // an unknown volume or kind.
   int applyFill(const FillSpec& spec, int volume);
+  // File > Export Selected Object (`visible` false) and Export Visible Scene
+  // (P06 T1): the export dialog (export_dialog.h) over the selected object,
+  // or the visible objects in a union, posed in world mm with their edits.
+  void exportDialog(bool visible);
+  // Export `objects` (scene ids) as `spec` says on a worker thread
+  // (export_job.h), with a progress dialog whose Cancel leaves no file. False
+  // when no id names an object, the graph does not build, or a job runs.
+  bool exportObjects(const std::vector<int>& objects, const ExportSpec& spec);
+  bool exportRunning() const { return exportJob_ != nullptr; }
+  // The running export's progress dialog, or null.
+  QProgressDialog* exportProgressDialog() const { return exportProgress_; }
   // Object `id`'s world box as on screen (its trace box, posed), which the
   // fill's defaults read; none when it is not on screen.
   std::optional<dualc::BBox> worldBounds(int id) const;
@@ -159,6 +173,9 @@ class MainWindow : public QMainWindow {
   // A Make Watertight ended: `ok` when its mesh replaced the object, false
   // when it was cancelled or failed.
   void watertightFinished(bool ok);
+  // An export ended: `ok` when the file was written, false when it was
+  // cancelled or failed (no file is left then).
+  void exportFinished(bool ok);
 
  protected:
   void dragEnterEvent(QDragEnterEvent* event) override;
@@ -266,6 +283,11 @@ class MainWindow : public QMainWindow {
   QDoubleSpinBox* smoothK_;
   int selectAfter_ = 0;  // the object to select when the scene next commits
   std::unique_ptr<WatertightJob> job_;
+  ExportJob* exportJob_ = nullptr;
+  QProgressDialog* exportProgress_ = nullptr;
+  QAction* exportSelectedAction_ = nullptr;
+  QAction* exportVisibleAction_ = nullptr;
+  QString exportPath_;  // the last export's file
   int watertightDepth_;
   Doc doc_;  // on screen
   LoweredScene lowered_;

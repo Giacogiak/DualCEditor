@@ -1,5 +1,7 @@
 #include "main_window.h"
 
+#include "export_dialog.h"
+#include "export_job.h"
 #include "fill_dialog.h"
 #include "graph_file.h"
 #include "graph_scene.h"
@@ -14,6 +16,7 @@
 
 #include <QAction>
 #include <QDateTime>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QDockWidget>
 #include <QDoubleSpinBox>
@@ -30,6 +33,7 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QProgressDialog>
+#include <QStandardPaths>
 #include <QThread>
 #include <QWidgetAction>
 #include <QStatusBar>
@@ -109,6 +113,8 @@ struct MainWindow::WatertightJob : dualc::ProgressSink {
 };
 
 MainWindow::~MainWindow() {
+  delete exportJob_;  // cancels and waits
+  exportJob_ = nullptr;
   if (job_) {
     job_->cancel.request();
     job_->thread->wait();
@@ -190,6 +196,13 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   save->setShortcut(QKeySequence::Save);
   QAction* saveAs = fileMenu->addAction("Save Scene &As...", this, &MainWindow::saveDialog);
   saveAs->setShortcut(QKeySequence::SaveAs);
+  fileMenu->addSeparator();
+  exportSelectedAction_ =
+      fileMenu->addAction("&Export Selected Object...", this, [this] { exportDialog(false); });
+  exportSelectedAction_->setShortcut(QKeySequence("Ctrl+E"));
+  exportVisibleAction_ =
+      fileMenu->addAction("Export &Visible Scene...", this, [this] { exportDialog(true); });
+  exportVisibleAction_->setShortcut(QKeySequence("Ctrl+Shift+E"));
   fileMenu->addSeparator();
   QAction* quit = fileMenu->addAction("&Quit", this, &QWidget::close);
   quit->setShortcut(QKeySequence::Quit);
@@ -491,8 +504,128 @@ void MainWindow::watertightDone() {
   emit watertightFinished(ok);
 }
 
+void MainWindow::exportDialog(bool visible) {
+  std::vector<int> ids;
+  QString what;
+  if (visible) {
+    for (const SceneObject& o : document_.scene().objects())
+      if (o.visible && doc_.scene.find(o.id)) ids.push_back(o.id);
+    what = tr("Visible Scene");
+  } else if (const SceneObject* o = document_.scene().find(selected_)) {
+    ids.push_back(o->id);
+    what = o->name;
+  }
+  if (exportJob_) return;
+  if (ids.empty()) {
+    statusBar()->showMessage(visible ? "Nothing to export: no object is visible"
+                                     : "Nothing to export: select an object");
+    return;
+  }
+  std::shared_ptr<ExportField> field;
+  try {
+    field = buildExportField(exportGraph(document_.scene(), ids),
+                             document_.scene().find(ids.front())->meshDir);
+  } catch (const std::exception& e) {
+    reportError(what, "export: " + QString::fromUtf8(e.what()));
+    return;
+  }
+  QString path = exportPath_;
+  const QString dir =
+      path.isEmpty() ? (scenePath_.isEmpty()
+                            ? QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation)
+                            : QFileInfo(scenePath_).absolutePath())
+                     : QFileInfo(path).absolutePath();
+  const QString suffix = path.isEmpty() ? QString("stl") : QFileInfo(path).suffix();
+  path = QDir(dir).filePath((visible ? QString("scene") : what) + "." + suffix);
+  ExportDialog dialog(field, what, path, this);
+  if (dialog.exec() != QDialog::Accepted) return;
+  exportObjects(ids, dialog.spec());
+}
+
+bool MainWindow::exportObjects(const std::vector<int>& objects, const ExportSpec& spec) {
+  if (exportJob_ || objects.empty()) return false;
+  const SceneObject* first = document_.scene().find(objects.front());
+  if (!first) return false;
+  std::size_t unbaked = 0;
+  std::shared_ptr<ExportField> field;
+  try {
+    field = buildExportField(exportGraph(document_.scene(), objects, &unbaked), first->meshDir);
+  } catch (const std::exception& e) {
+    reportError(first->name, "export: " + QString::fromUtf8(e.what()));
+    return false;
+  }
+  if (unbaked)
+    log(QString("export: %1 parameter edit(s) name no graph param and are not in the file")
+            .arg(unbaked));
+  exportPath_ = spec.path;
+  const QString name = QFileInfo(spec.path).fileName();
+  exportJob_ = new ExportJob(field, spec, this);
+  // Window-modal, shown, not exec'd: the event loop runs on and the viewport
+  // keeps drawing while DualC contours on the job's thread.
+  exportProgress_ = new QProgressDialog(QString("Export %1").arg(name), "Cancel", 0, 1000, this);
+  exportProgress_->setWindowTitle("Export");
+  exportProgress_->setWindowModality(Qt::WindowModal);
+  exportProgress_->setMinimumDuration(0);
+  exportProgress_->setAutoClose(false);
+  exportProgress_->setAutoReset(false);
+  exportProgress_->setValue(0);
+  connect(exportProgress_, &QProgressDialog::canceled, this, [this, name] {
+    if (!exportJob_) return;
+    exportJob_->cancel();
+    exportProgress_->setLabelText(QString("Export %1\nCancelling...").arg(name));
+  });
+  connect(exportJob_, &ExportJob::progress, this, [this, name](int permille, const QString& stage) {
+    if (!exportJob_ || exportJob_->cancelRequested()) return;
+    exportProgress_->setLabelText(QString("Export %1\n%2").arg(name, stage));
+    exportProgress_->setValue(std::max(exportProgress_->value(), permille));
+  });
+  connect(exportJob_, &ExportJob::finished, this, [this, name] {
+    ExportJob* job = exportJob_;
+    exportJob_ = nullptr;
+    exportProgress_->deleteLater();
+    exportProgress_ = nullptr;
+    const ExportResult& r = job->result();
+    const ExportSpec& s = job->spec();
+    if (r.status == ExportStatus::Cancelled) {
+      statusBar()->showMessage(QString("Export of %1 cancelled; no file written").arg(name));
+      log(QString("export %1: cancelled after %2 ms").arg(s.path).arg(job->ms(), 0, 'f', 0));
+    } else if (r.status == ExportStatus::Failed) {
+      reportError(name, "export: " + (r.error.isEmpty() ? QString("DualC's writer failed (rc %1)")
+                                                                .arg(r.rc)
+                                                          : r.error));
+    } else {
+      QString facts = s.tiled ? QString("tiled, tile depth %1").arg(s.tileDepth)
+                              : QString("%1 triangles, %2")
+                                    .arg(r.diag.outputTriangles)
+                                    .arg(r.diag.outputWatertight
+                                             ? QString("watertight")
+                                             : QString("%1 open, %2 non-manifold edges")
+                                                   .arg(r.diag.outputBoundaryEdges)
+                                                   .arg(r.diag.outputNonManifoldEdges));
+      if (r.diagnosed && r.diag.emptyContour) facts = "empty: the field has no surface in the bounds";
+      log(QString("export %1: depth %2 in %3 ms: %4")
+              .arg(s.path)
+              .arg(s.depth)
+              .arg(job->ms(), 0, 'f', 0)
+              .arg(facts));
+      statusBar()->showMessage(QString("Exported %1: %2").arg(name, facts));
+    }
+    job->deleteLater();
+    updateObjectActions();
+    emit exportFinished(r.status == ExportStatus::Written);
+  });
+  updateObjectActions();
+  statusBar()->showMessage(QString("Exporting %1...").arg(name));
+  exportJob_->start();
+  return true;
+}
+
 void MainWindow::updateObjectActions() {
   const SceneObject* o = document_.scene().find(selected_);
+  if (exportSelectedAction_) {
+    exportSelectedAction_->setEnabled(!exportJob_ && o && doc_.scene.find(selected_));
+    exportVisibleAction_->setEnabled(!exportJob_);
+  }
   watertightAction_->setEnabled(!job_ && o && doc_.scene.find(selected_) &&
                                 meshObjectKind(o->graph) == "winding");
   std::size_t operands = 0;

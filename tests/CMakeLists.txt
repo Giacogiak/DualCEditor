@@ -171,3 +171,12 @@ target_link_libraries(operations_test PRIVATE dualceditor_core)
 dualceditor_target_options(operations_test)
 add_test(NAME operations
   COMMAND operations_test ${CMAKE_CURRENT_SOURCE_DIR}/../docs/command_reference/01-viewport.md)
+
+# Mesh export (P06 T1): a TPMS fill exported at depth 6 is watertight by
+# DualC's diagnostics, the depth estimate is within 2x, the tiled STL is
+# closed, a cancel leaves no file, the job runs off the event loop's thread,
+# and the dialog gives its spec. GL-free (offscreen platform).
+add_executable(export_test export_test.cpp)
+target_link_libraries(export_test PRIVATE dualceditor_core)
+dualceditor_target_options(export_test)
+add_test(NAME export COMMAND export_test)

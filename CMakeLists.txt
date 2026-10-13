@@ -57,6 +57,10 @@ endfunction()
 add_library(dualceditor_core STATIC
   src/bench.cpp
   src/bench.h
+  src/export_dialog.cpp
+  src/export_dialog.h
+  src/export_job.cpp
+  src/export_job.h
   src/fill_dialog.cpp
   src/fill_dialog.h
   src/gizmo.cpp
@@ -71,6 +75,8 @@ add_library(dualceditor_core STATIC
   src/mesh_import.h
   src/mesh_solid.cpp
   src/mesh_solid.h
+  src/mesh_export.cpp
+  src/mesh_export.h
   src/mesh_library.cpp
   src/mesh_library.h
   src/orbit_camera.cpp

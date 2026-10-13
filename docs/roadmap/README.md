@@ -2,7 +2,19 @@
 
 ## Current focus
 
-**Now: P06, export (`../../plan/70_P06_export.md`).**
+**The plan is done (2026-10-13).** Every phase in `../../plan/README.md` (P00 to P07) has
+run, and P06 was the last. No phase is next until the owner adds one. Still open: the GTX
+checks queued for the owner's next laptop session (P03, P04, P05, and P06's export timings),
+E-28's verdict (`../decisions/03-deferred.md`), the cold-compile question and the
+`main_window` failure on the GTX, both below.
+
+Done: P06, export (`../../plan/70_P06_export.md`, `../../HANDOFF_P06_TASK1.md`).
+`File ▸ Export Selected Object…` (`Ctrl+E`) and `Export Visible Scene…` (`Ctrl+Shift+E`)
+open a dialog: the file, whose extension picks STL, 3MF or OBJ; the depth, with an
+estimate of the triangles and the RAM; the bounds; and DualC's tiled STL and 3MF, which
+closes E-27. DualC writes on a worker thread, with progress and a Cancel that leaves no
+file (`../design/08-export.md`). A gyroid fill at depth 6 writes a watertight file, and the
+estimate is 0.89× the real count there.
 
 Done: P05, operations (`../../plan/60_P05_operations.md`). T1
 (`../../HANDOFF_P05_TASK1.md`): `Operations ▸ Union … Smooth Difference` on the objects
