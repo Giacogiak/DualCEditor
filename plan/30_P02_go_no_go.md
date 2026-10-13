@@ -27,7 +27,10 @@ Update `docs/decisions/03-deferred.md` for every trigger that fired.
   E-23 fired at P01.4 and is planned, E-22 not measured. Six plan edits proposed, none
   applied (`HANDOFF_P02_TASK1.md`).
 - The feasibility note gives no number for "interactive"; the note reads it as at most
-  33 ms per moving frame, for the owner to confirm.
+  33 ms per moving frame. The owner kept it.
+- **Approved (Giacomo, 2026-10-13):** the verdict and the edits, applied in the same unit:
+  new phase P07 (`35_P07_render_scaling.md`, units P07.1–P07.3 in `run.manifest.json` at
+  the owner's request), P03 T3, P04 T2 and P05 T2 acceptance, E-28.
 
 ## Exit criteria
 - T1 is met, and the owner has approved the note before P03 starts.

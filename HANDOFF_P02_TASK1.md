@@ -1,11 +1,10 @@
 # Handoff — P02 T1: write the go/no-go note
 
-Date: 2026-10-12. Plan: `plan/30_P02_go_no_go.md` § T1. DualC pin: `2fcb6ee` (unchanged).
+Date: 2026-10-12, approved and closed 2026-10-13. Plan: `plan/30_P02_go_no_go.md` § T1. DualC pin: `2fcb6ee` (unchanged).
 
-**Status: written, waiting for the owner's approval** at P02's gate (`approve` in the
-manifest). The note says **go**. P02's exit criterion "the owner has approved the note
-before P03 starts" cannot be closed by a unit, so this unit returns `blocked` with the
-approval and the choices it needs as questions.
+**Status: done.** The note says **go**. The first session returned `blocked` on P02's
+gate. Giacomo answered on 2026-10-13, approving the verdict and every proposed edit, and
+the second session applied them (§ The owner's answers). P02 is closed; P07 is next.
 
 ## What changed and why
 
@@ -26,6 +25,30 @@ approval and the choices it needs as questions.
 - **`plan/30_P02_go_no_go.md`**: T1 notes.
 
 No C++, no script, no test changed.
+
+## The owner's answers (Giacomo, 2026-10-13) and what was applied
+
+1. **Go: approved.** P03 may start once E-08 is decided. Note status line marked approved.
+2. **33 ms stays the interactive bar.**
+3. **E-21 triggered now.** `docs/decisions/03-deferred.md` § E-21: *Confirmed* line, planned
+   as P07 T2.
+4. **Option 1a: a new phase P07**, `plan/35_P07_render_scaling.md`, run right after P02:
+   - T1 culling (E-23);
+   - T2 async compile (E-21; no editor program cache);
+   - T3 the GTX re-measurement, a human check.
+
+   Indexed in `plan/README.md`. **Units P07.1–P07.3 were added to `plan/run.manifest.json`**
+   after P02.1, on the owner's explicit instruction (the brief otherwise reserves the
+   manifest to the owner). Gate `auto`, P07.3 `phaseEnd`, same `verify` list as the
+   others. No other manifest field changed.
+5. **Items 2–5 approved and applied:**
+   - P03 T3 acceptance: the trace and culling boxes follow a move as uniforms;
+   - P04 T2: a GTX human check of 1, 3, 5 meshes (`--meshes`), for E-22's trigger;
+   - P05 T2: a GTX human check of the octet fill at 0.35, for E-28's trigger;
+   - E-28, an interruptible settle, written into `docs/decisions/03-deferred.md`.
+
+Also: `docs/roadmap/README.md` now names P07 as the focus and P02 as done; E-23's
+*Planned* line points at P07 T1; E-22's line says P04 T2 now carries the measurement.
 
 ## The numbers the verdict rests on
 
@@ -53,9 +76,9 @@ P00.5 rows at commit 53c6cb6 (2026-10-10), P01.4 rows at b011b24 (2026-10-12).
 Nothing was measured in this unit: it is a reading of the owner's runs. `python
 scripts/check.py`: green, 12/12 ctests, on the development box.
 
-## Plan edits the note proposes (not applied)
+## Plan edits the note proposed (all approved and applied on 2026-10-13)
 
-From `docs/roadmap/03-go-no-go.md` § Changes P03–P06 need. The owner approves each.
+From `docs/roadmap/03-go-no-go.md` § Changes P03–P06 need.
 
 1. **Schedule E-23 (culling) and E-21 (async compile) before P05.**
    - (a, recommended) a new phase P07, `plan/35_P07_render_scaling.md`, run right after
@@ -74,8 +97,7 @@ From `docs/roadmap/03-go-no-go.md` § Changes P03–P06 need. The owner approves
    `--meshes` family in `measure_viewport.py` — E-22's trigger, unmeasured today.
 4. **P05 T2**: a human check of the octet fill at 0.35 on the GTX against
    P00.5 · tapered octet (P12) · 0.35.
-5. **A new deferred item, E-28 (the next free id, not yet written into
-   `03-deferred.md`): an interruptible settle** — the full-resolution frame drawn in tiles
+5. **A new deferred item, E-28: an interruptible settle** — the full-resolution frame drawn in tiles
    so a drag starting during it waits one tile, optionally with an automatic preview-scale
    drop past 33 ms. Trigger: P05 T2's octet fill still lags at the start of a drag.
 6. **P06**: no change.
@@ -94,13 +116,12 @@ From `docs/roadmap/03-go-no-go.md` § Changes P03–P06 need. The owner approves
   - Each fired trigger is recorded on its item: E-21 (fired now), E-23 (fired at P01.4,
     now also planned) in `docs/decisions/03-deferred.md`; E-22 marked not fired.
   - This handoff lists the six proposed plan edits; none is applied.
-- **The owner has approved the note before P03 starts: open.** This is the gate. It is
-  the reason this unit returns `blocked`.
+- **The owner has approved the note before P03 starts: met.** Giacomo approved it on
+  2026-10-13 (answers above), and P03 has not started; P07 runs first.
+- `python scripts/check.py`: green after the second session's edits (12/12 ctests).
 
 ## Open
 
-- **The owner's approval**, and the choices in it: the 33 ms reading of "interactive";
-  E-21's trigger read by its second clause; option 1a or 1b; items 2–5.
 - The start-of-drag lag on the octet is attributed to the in-flight settle frame from the
   render path, not measured. A bench phase that starts a drag right after a settle would
   confirm it.
@@ -109,9 +130,11 @@ From `docs/roadmap/03-go-no-go.md` § Changes P03–P06 need. The owner approves
 
 ## For the next unit
 
-- If the owner approves, apply the approved edits in the plan files first (and the
-  manifest for 1a is the owner's), then write E-28 into `03-deferred.md` if item 5 is
-  approved, and mark the note's status line approved.
+- **P07.1 (culling)** starts from `plan/35_P07_render_scaling.md` § T1 and
+  `docs/design/03-scene-lowering.md` § Lowering. The culling boxes are uniform pairs, so
+  P03 T3's move stays a uniform edit.
+- **P07.2 (async compile)**: the compile and link run today in `TraceRenderer` on the
+  GUI thread (`src/trace_renderer.cpp`, `glLinkProgram`).
+- **P07.3** re-runs `measure_viewport.py --objects` (plus T1's depth-stacked family). The
+  same scenes and growth lines compare directly with P01.4.
 - P03 still waits on E-08 (`docs/decisions/02-open.md`).
-- `measure_viewport.py --objects` re-measures the culling directly: same scenes, same
-  growth lines.

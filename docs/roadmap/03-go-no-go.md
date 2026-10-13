@@ -14,8 +14,10 @@ The feasibility note gives no frame time for "interactive". This note reads it a
 **at most 33 ms per moving frame (30 fps)**, and 16.7 ms (60 Hz) as smooth. The owner's
 live impressions (P00 T5 checklist, step 6) are quoted where they exist.
 
-**Status: proposed, waiting for the owner's approval at P02's gate.** The plan edits in
-§ Changes P03–P06 need are proposals; none is applied.
+**Status: approved (Giacomo, 2026-10-13).** The owner approved the verdict, kept 33 ms as
+the interactive bar, confirmed E-21's trigger now, chose option 1a (a new phase P07), and
+approved items 2–5. All are applied: `../../plan/35_P07_render_scaling.md`, P03 T3, P04 T2
+and P05 T2's acceptance criteria, and E-28 in `../decisions/03-deferred.md`.
 
 ## Verdict: go
 
@@ -95,7 +97,7 @@ both are editor-side work and need no DualC change (rule 5).
 
 | Item | Trigger | Fired? | Evidence |
 |---|---|---|---|
-| E-21 Async compile and program cache | a compile stall the owner finds disruptive, **or any phase from P03 onward** | **Yes**, by its second clause: P03 is the next phase. Whether the stall is disruptive is the owner's call. | Cold compiles of 0.16–1.2 s on the GUI thread (above). |
+| E-21 Async compile and program cache | a compile stall the owner finds disruptive, **or any phase from P03 onward** | **Yes**, by its second clause: P03 is the next phase. The owner confirmed it on 2026-10-13. | Cold compiles of 0.16–1.2 s on the GUI thread (above). |
 | E-22 Freeze an object to a baked grid | frame time with several mesh objects misses the target | **No**: not measured. One mesh object settles at 7.3 GPU ms. | **P00.5 · mesh_lattice.json · 1** |
 | E-23 Bounding-box culling | frame time grows with the number of non-overlapping objects | **Yes**, at P01.4 (recorded then). | § Against object count, growth table |
 
@@ -117,11 +119,11 @@ DualC change.
 
 ## Changes P03–P06 need
 
-Proposed; the owner approves or rejects each at the gate.
+Proposed by P02.1; all approved by the owner on 2026-10-13 and applied.
 
 1. **Schedule E-23 and E-21 before P05.** P05 is where object counts and structural edits
    multiply. Two ways:
-   - **(a, recommended)** a new phase, `plan/35_P07_render_scaling.md` (P07, the next free
+   - **(a, recommended, chosen)** a new phase, `plan/35_P07_render_scaling.md` (P07, the next free
      phase id), that runs right after P02. Neither task depends on E-08, so it does not wait
      on P03's open decision. Needs new units in `plan/run.manifest.json` (the owner's).
    - **(b)** two new tasks in P03, T4 (E-23) and T5 (E-21), after the gizmo. No new phase,
@@ -145,7 +147,7 @@ Proposed; the owner approves or rejects each at the gate.
 4. **P05 T2 (fills).** Add a human check: the octet fill of an imported mesh, timed on the
    GTX at 0.35, against **P00.5 · tapered octet (P12) · 0.35**. Its result decides
    item 5.
-5. **A new deferred item (the next free id, E-28): an interruptible settle.** Draw the
+5. **A new deferred item, E-28 (recorded): an interruptible settle.** Draw the
    full-resolution frame in tiles over several frames, so a drag that starts during it
    waits for one tile, not the whole frame; optionally lower the preview scale on its own
    when a moving frame passes 33 ms. **Trigger:** P05 T2's octet fill still lags at the

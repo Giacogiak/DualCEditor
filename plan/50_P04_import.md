@@ -31,6 +31,10 @@ D-45); say so in the UI.
 - "Make watertight" runs without freezing the UI, reports progress, and can be cancelled
   during contouring.
 - The preview badge shows the grid resolution the mesh is previewed at.
+- Human check: the owner times scenes of 1, 3 and 5 imported mesh objects on the GTX
+  1050 Ti at preview scales 0.35 and 1.0, through a `--meshes` family in
+  `scripts/measure_viewport.py`. The rows go in `docs/roadmap/02-measurements.md`, and the
+  handoff says whether E-22's trigger fired (`docs/roadmap/03-go-no-go.md`, item 3).
 
 ## Exit criteria
 - Tasks T1 and T2 are met. `python scripts/check.py` is green.

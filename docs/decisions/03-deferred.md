@@ -17,6 +17,8 @@ GTX 1050 Ti's cold compiles run 157–670 ms for 1–10 primitives (about +57 ms
 before to 14–31 ms (`../roadmap/02-measurements.md`). Whether the stall is disruptive (the
 first clause) is the owner's call. `../roadmap/03-go-no-go.md` plans it: asynchronous
 compile first, an editor program cache only if measured to help.
+**Confirmed (Giacomo, 2026-10-13):** trigger now. Planned as P07 T2
+(`../../plan/35_P07_render_scaling.md`).
 
 ## E-22 — Freeze an object to a baked grid
 Bake a finished non-lattice object to a 3D texture so its per-step cost is constant.
@@ -24,7 +26,7 @@ Loses sharp edges and thin walls at 96³–256³, so lattices stay analytic. **T
 frame time with several mesh objects misses the target on the GTX 1050 Ti.
 **Not fired (P02.1, 2026-10-12):** no scene of several mesh objects has been measured; one
 mesh object settles at 7.3 GPU ms. `../roadmap/03-go-no-go.md` proposes the measurement for
-P04 T2.
+P04 T2 (approved 2026-10-13, now in P04 T2's acceptance).
 
 ## E-23 — Per-object bounding-box culling in the shader
 
@@ -32,7 +34,7 @@ P04 T2.
 **Triggered (P01.4, 2026-10-12):** about +0.29 ms per added primitive and +2.5 ms per added
 TPMS-in-box, settled GPU at 1280×800 on the GTX 1050 Ti (`../roadmap/02-measurements.md`).
 **Trigger:** frame time grows with the number of non-overlapping objects (P01's measurement).
-**Planned (P02.1, 2026-10-12):** `../roadmap/03-go-no-go.md` § Changes P03–P06 need, item 1.
+**Planned (P02.1, approved 2026-10-13):** P07 T1 (`../../plan/35_P07_render_scaling.md`).
 
 ## E-24 — Reuse of one object in several operations (DAG references)
 DualC's graph is a tree (DualC D-12). **Trigger:** the scene model needs an object used by
@@ -46,3 +48,12 @@ Not in scope (E-03). **Trigger:** the owner asks for them after P02.
 
 ## E-27 — Tiled export for large lattices in the export dialog
 DualC's tiled STL export keeps peak memory at one tile. **Trigger:** P06.
+
+## E-28 — An interruptible settle
+The full-resolution frame is drawn in one draw on the GUI thread's context, so a drag that
+starts while it is in flight waits for it: up to about 390 ms on the tapered octet
+(`../roadmap/03-go-no-go.md`). Draw it in tiles over several frames, so a drag waits one
+tile; optionally lower the preview scale on its own when a moving frame passes 33 ms.
+Editor-side; the trace per pixel stays DualC's. Proposed by P02.1, approved by Giacomo on
+2026-10-13. **Trigger:** P05 T2's octet fill still lags at the start of a drag on the
+GTX 1050 Ti.

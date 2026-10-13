@@ -2,14 +2,17 @@
 
 ## Current focus
 
-**Now: P02, go or no-go (`../../plan/30_P02_go_no_go.md`).** It decides from the GTX 1050 Ti
-measurements of P00 and P01 (`02-measurements.md`) whether the editor goes on, and which
-deferred items the numbers trigger. T1 is written: `03-go-no-go.md` says **go**. Every
-analytic and one-mesh scene measured orbits at 0.35–0.5 well inside 16.7 ms and settles in
-under 10 ms; the tapered octet misses (81–128 ms moving), as the feasibility note expected,
-and `dualc_field_view` is no faster on it. E-23 (culling) and E-21 (async compile) are
-triggered; E-22 is not measured. The note proposes plan edits for P03–P06. **Waiting for
-the owner's approval** at P02's gate before P03 starts.
+**Now: P07, render scaling (`../../plan/35_P07_render_scaling.md`).** Per-object
+bounding-box culling (E-23), asynchronous shader compile (E-21), then a GTX re-measurement.
+Added by P02 and run before P03, since neither waits on E-08.
+
+Done: P02, go or no-go (`../../plan/30_P02_go_no_go.md`). `03-go-no-go.md` says **go**,
+approved by the owner on 2026-10-13. Every analytic and one-mesh scene measured orbits at
+0.35–0.5 well inside 16.7 ms and settles in under 10 ms; the tapered octet misses
+(81–128 ms moving against a 33 ms bar), as the feasibility note expected, and
+`dualc_field_view` is no faster on it. E-23 and E-21 are triggered and planned in P07; E-22
+is not measured (P04 T2 now measures it); E-28 (interruptible settle) is new, behind P05
+T2's octet check.
 
 Done: P01, scene and picking, Spike B (`../../plan/20_P01_scene_and_picking.md`). E-07
 is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
@@ -37,8 +40,7 @@ the moving frame time is within about 10% on the like-for-like rows. P00 is clos
 
 ## Next up
 
-The owner approves or amends `03-go-no-go.md` and its plan edits. Then P03, which also
-waits on E-08 (or first the proposed P07, render scaling, if the owner takes option 1a).
+P07 (above), then P03, which waits on E-08 (`../decisions/02-open.md`).
 
 ## Files
 

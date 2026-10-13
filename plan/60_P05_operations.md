@@ -29,6 +29,10 @@ volume.
 - Filling an imported mesh with a gyroid, and separately with an octet lattice, renders
   correctly. A boolean on the filled result works.
 - The panels show the units (mm) and the real defaults.
+- Human check: the owner times the octet fill of an imported mesh on the GTX 1050 Ti at
+  preview scale 0.35, against the row P00.5 · tapered octet (P12) · 0.35 of
+  `docs/roadmap/02-measurements.md`, and says whether it still lags at the start of a drag.
+  The handoff says whether E-28's trigger fired (`docs/roadmap/03-go-no-go.md`, item 4).
 
 ### T3. Operation panels generated from DualC's registries
 

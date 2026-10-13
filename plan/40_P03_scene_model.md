@@ -42,6 +42,9 @@ millimetres. Values are typed in, the same way DualC's graph `units` are.
 
 #### Acceptance criteria
 - A transformed object renders, saves and reloads at the same pose.
+- A moved object is still drawn whole, with no compile: the trace box (`uBoundsMin`,
+  `uBoundsMax`) and the object's culling box (P07 T1) follow the move as uniforms
+  (`docs/roadmap/03-go-no-go.md`, item 2).
 - The command-reference page is updated.
 
 ## Exit criteria

@@ -22,6 +22,7 @@ development box cannot measure performance.
 | `10_P00_viewport.md` | Spike A: DualC's tracer in a Qt viewport | auto, human check at T5 |
 | `20_P01_scene_and_picking.md` | Spike B: several objects, show/hide, picking | stop on E-07 |
 | `30_P02_go_no_go.md` | Measured go/no-go before the full editor | approve |
+| `35_P07_render_scaling.md` | Per-object culling (E-23) and asynchronous compile (E-21), added by P02 | auto, human check at T3 |
 | `40_P03_scene_model.md` | Scene model, undo, `.dcscene` | stop on E-08 |
 | `50_P04_import.md` | Drag-and-drop mesh import, watertight solids | stop on E-09 |
 | `60_P05_operations.md` | Booleans, lattice fills, operation panels | stop on E-10 |

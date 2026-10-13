@@ -219,6 +219,55 @@
 			]
 		},
 		{
+			"id": "P07.1",
+			"title": "Per-object bounding-box culling (E-23)",
+			"planFile": "plan/35_P07_render_scaling.md",
+			"task": "T1. Per-object bounding-box culling (E-23)",
+			"convention": "subheadings",
+			"gate": "auto",
+			"gateReason": "added by P02's go/no-go (approved 2026-10-13); no stop rule matched",
+			"handoff": "HANDOFF_P07_TASK1.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff",
+				"ci"
+			]
+		},
+		{
+			"id": "P07.2",
+			"title": "Asynchronous shader compile (E-21)",
+			"planFile": "plan/35_P07_render_scaling.md",
+			"task": "T2. Asynchronous shader compile (E-21)",
+			"convention": "subheadings",
+			"gate": "auto",
+			"gateReason": "added by P02's go/no-go (approved 2026-10-13); no stop rule matched",
+			"handoff": "HANDOFF_P07_TASK2.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff",
+				"ci"
+			]
+		},
+		{
+			"id": "P07.3",
+			"title": "Measure culling and compile on the GTX 1050 Ti — human check",
+			"planFile": "plan/35_P07_render_scaling.md",
+			"task": "T3. Measure culling and compile on the GTX 1050 Ti — human check",
+			"convention": "subheadings",
+			"phaseEnd": true,
+			"gate": "auto",
+			"gateReason": "added by P02's go/no-go (approved 2026-10-13); no stop rule matched",
+			"handoff": "HANDOFF_P07_TASK3.md",
+			"verify": [
+				"tree-clean",
+				"new-commit",
+				"handoff",
+				"ci"
+			]
+		},
+		{
 			"id": "P03.1",
 			"title": "Operation history and undo",
 			"planFile": "plan/40_P03_scene_model.md",
