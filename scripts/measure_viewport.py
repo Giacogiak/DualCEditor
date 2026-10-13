@@ -5,11 +5,12 @@ in docs/roadmap/02-measurements.md. The owner runs it on the GTX 1050 Ti laptop.
   python scripts/measure_viewport.py                    # Windows, or Linux on its default GPU
   python scripts/measure_viewport.py --prime            # Linux PRIME: offload to the NVIDIA GPU
   python scripts/measure_viewport.py --field-view PATH  # also diff snapshots against dualc_field_view
-  python scripts/measure_viewport.py --objects          # P01 T4: frame time against object count
+  python scripts/measure_viewport.py --objects          # P01 T4, P07: frame time against object count
 
 Without --objects, each P00 scene runs at preview scales 0.35, 0.5 and 1.0. With
---objects, scenes of 1, 3, 5 and 10 analytic primitives and of 1 and 3 TPMS-in-box objects
-run at 0.35 and 1.0, and the script also prints the growth per added object. Every run goes
+--objects, scenes of 1, 3, 5 and 10 analytic primitives side by side, of 1, 3, 5 and 10
+stacked in depth (P07 T1), and of 1 and 3 TPMS-in-box objects run at 0.35 and 1.0, and the
+script also prints the growth per added object. Every run goes
 through `DualCEditor --bench` (docs/command_reference/01-viewport.md). The script prints
 one markdown row per run and appends the raw JSON lines to measurements-<date>.jsonl in the
 working directory.
@@ -19,6 +20,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import math
 import os
 import platform
 import shutil
@@ -44,6 +46,11 @@ CUBE_OBJ = ("v -0.5 -0.5 -0.5\nv 0.5 -0.5 -0.5\nv -0.5 0.5 -0.5\nv 0.5 0.5 -0.5\
 # radius 0.4 and a box of side 0.8, so no two overlap. The view frames the union, so the
 # objects cover about the same share of the screen whatever their count.
 PRIMITIVE_COUNTS = (1, 3, 5, 10)
+# P07 T1. The same primitives in a column along the default view axis (yaw 0.7, pitch 0.5,
+# from the target toward the camera), 1.2 apart, the first nearest the camera: the rays near
+# the front object meet every box behind it, the case per-object culling must still serve.
+# The framing grows with the column, so the front object shrinks as objects are added.
+VIEW_AXIS = (math.cos(0.5) * math.sin(0.7), math.sin(0.5), math.cos(0.5) * math.cos(0.7))
 TPMS_COUNTS = (1, 3)
 OBJECT_SCALES = (0.35, 1.0)
 # gyroid_box.json without its spherical hole; copies sit 5 apart along x.
@@ -71,26 +78,32 @@ def scenes(samples: Path, work: Path) -> list[tuple[str, Path]]:
             ("mesh_lattice.json", lattice)]
 
 
-def primitive(i: int) -> str:
-    x, y = 1.2 * (i % 5 - 2), 1.2 * (0.5 - i // 5)
+def primitive(i: int, depth: bool = False) -> str:
+    if depth:
+        c = tuple(round(-1.2 * i * a, 4) for a in VIEW_AXIS)
+    else:
+        c = (1.2 * (i % 5 - 2), 1.2 * (0.5 - i // 5), 0)
     if i % 2 == 0:
-        return f"sphere(center=[{x:g},{y:g},0],radius=0.4)\n"
-    lo = ",".join(f"{v - 0.4:g}" for v in (x, y, 0))
-    hi = ",".join(f"{v + 0.4:g}" for v in (x, y, 0))
+        return f"sphere(center=[{','.join(f'{v:g}' for v in c)}],radius=0.4)\n"
+    lo = ",".join(f"{v - 0.4:g}" for v in c)
+    hi = ",".join(f"{v + 0.4:g}" for v in c)
     return f"box(min=[{lo}],max=[{hi}])\n"
 
 
 def object_scenes(work: Path) -> list[tuple[str, int, list[Path]]]:
-    """(name, object count, graphs) for P01 T4: one graph file per object."""
-    prims, tpms = [], []
+    """(name, object count, graphs) for P01 T4 and P07: one graph file per object."""
+    prims, depth, tpms = [], [], []
     for i in range(max(PRIMITIVE_COUNTS)):
         prims.append(work / f"primitive_{i}.fld")
         prims[-1].write_text(primitive(i))
+        depth.append(work / f"depth_{i}.fld")
+        depth[-1].write_text(primitive(i, depth=True))
     for i in range(max(TPMS_COUNTS)):
         tpms.append(work / f"tpms_box_{i}.fld")
         tpms[-1].write_text(f"translate(by=[{5 * i - 5 * (max(TPMS_COUNTS) // 2)},0,0],"
                             f"{TPMS_IN_BOX})\n")
     return ([(f"{n} primitive{'s' if n > 1 else ''}", n, prims[:n]) for n in PRIMITIVE_COUNTS]
+            + [(f"{n} stacked in depth", n, depth[:n]) for n in PRIMITIVE_COUNTS]
             + [(f"{n} TPMS-in-box", n, tpms[:n]) for n in TPMS_COUNTS])
 
 
@@ -225,7 +238,8 @@ def main() -> int:
     ap.add_argument("--field-view", type=Path,
                     help="dualc_field_view binary: also diff 800×600 snapshots against it")
     ap.add_argument("--objects", action="store_true",
-                    help="P01 T4: scenes of 1, 3, 5, 10 primitives and 1, 3 TPMS-in-box")
+                    help="P01 T4, P07: scenes of 1, 3, 5, 10 primitives side by side and "
+                         "stacked in depth, and of 1, 3 TPMS-in-box")
     ap.add_argument("--keep", action="store_true", help="keep the scratch folder")
     args = ap.parse_args()
 
@@ -264,7 +278,7 @@ def main() -> int:
         print("\n".join(rows))
         if args.objects:
             print()
-            for kind in ("primitive", "TPMS-in-box"):
+            for kind in ("primitive", "stacked in depth", "TPMS-in-box"):
                 for scale in scales:
                     print(growth(results, kind, scale))
         if args.field_view and not args.objects:

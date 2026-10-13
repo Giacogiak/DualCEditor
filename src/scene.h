@@ -51,7 +51,8 @@ class Scene {
 SceneColour sceneColourFor(int id);
 
 // The uniform an object owns in the lowered shader: "u_o<id>_<key>", with
-// key "visible" (float, 1 or 0) or "colour" (vec3). The object's own graph
+// key "visible" (float, 1 or 0), "colour" (vec3), or "boxMin" and "boxMax"
+// (vec3, the object's world box, which the culling reads). The object's own graph
 // uniforms are DualC's names with the id put in: "u_n3_radius" of object 2
 // is "u_o2_n3_radius".
 std::string objectUniformName(int id, const char* key);
@@ -70,6 +71,9 @@ struct LoweredObject {
   int transformBinding = -1;  // mat4 localFromWorld, row-major (DualC's)
   int visibleBinding = -1;
   int colourBinding = -1;
+  // The culling box (vec3 each): worldBounds as lowered. A move uploads
+  // worldBox(localBounds, worldFromLocal) here, with no compile.
+  int boxMinBinding = -1, boxMaxBinding = -1;
   dualc::BBox localBounds;  // the graph's padded trace box, before transform
   dualc::BBox worldBounds;  // localBounds transformed, as an axis-aligned box
   // DualC's march constants of the object compiled alone (GlslScene's).
@@ -85,13 +89,19 @@ struct LoweredScene {
   std::vector<LoweredObject> objects;  // in scene order
 };
 
+// The axis-aligned box around `local` moved by `worldFromLocal`.
+dualc::BBox worldBox(const dualc::BBox& local, const dualc::Mat4& worldFromLocal);
+
 // Lower `scene` to one GlslScene. Each object's graph is wrapped in DualC's
 // `transform` node and compiled on its own by compileToGlsl (meshes bake in
 // the object's local box), then its identifiers get the object id, so no two
-// objects share a function or a uniform. Throws dce::fieldgraph::GraphError
-// naming the object on the first object that does not compile, or when the
-// scene is empty.
-LoweredScene lowerScene(const Scene& scene);
+// objects share a function or a uniform. With `cull`, sceneSDF and sceneColor
+// skip an object while p is farther from its world box than the nearest
+// object so far (docs/design/03-scene-lowering.md § Culling); without, they
+// are the plain min of P01 (the reference the culling is tested against).
+// Throws dce::fieldgraph::GraphError naming the object on the first object
+// that does not compile, or when the scene is empty.
+LoweredScene lowerScene(const Scene& scene, bool cull = true);
 
 // The fragment shader for a GlslScene: DualC's assembleTraceShader, and when
 // the scene is a lowered one (it defines sceneColor) the framework's fixed

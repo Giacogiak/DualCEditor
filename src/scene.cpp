@@ -20,8 +20,9 @@ namespace {
 constexpr const char* kBaseAnchor = "vec3  base = vec3(0.80, 0.82, 0.86);";
 constexpr const char* kSceneColorDecl = "vec3 sceneColor(vec3 p)";
 
-// The axis-aligned box around `b` moved by `m`.
-BBox transformBox(const BBox& b, const dualc::Mat4& m) {
+}  // namespace
+
+BBox worldBox(const BBox& b, const dualc::Mat4& m) {
   const double inf = std::numeric_limits<double>::infinity();
   BBox out{{inf, inf, inf}, {-inf, -inf, -inf}};
   for (int i = 0; i < 8; ++i) {
@@ -33,6 +34,8 @@ BBox transformBox(const BBox& b, const dualc::Mat4& m) {
   }
   return out;
 }
+
+namespace {
 
 BBox unite(const BBox& a, const BBox& b) {
   return {{std::min(a.min.x, b.min.x), std::min(a.min.y, b.min.y), std::min(a.min.z, b.min.z)},
@@ -130,13 +133,17 @@ std::string objectUniformName(int id, const char* key) {
   return "u_o" + std::to_string(id) + "_" + key;
 }
 
-LoweredScene lowerScene(const Scene& scene) {
+LoweredScene lowerScene(const Scene& scene, bool cull) {
   if (scene.isEmpty()) throw fg::GraphError("the scene has no objects", "");
   LoweredScene out;
   fg::GlslScene& s = out.scene;
   s.stepScale = 1.0f;
   s.featureScale = 0.0f;
   std::ostringstream src, sdf, colour;
+  // The distance from p to an object's world box, 0 inside it.
+  if (cull)
+    sdf << "float sceneBoxDist(vec3 p, vec3 lo, vec3 hi) {\n"
+           "  return length(max(max(lo - p, p - hi), 0.0));\n}\n";
   sdf << "float sceneSDF(vec3 p) {\n  float d = 1e10;\n";
   colour << kSceneColorDecl << " {\n  float d = 1e10;\n  float id = 0.0;\n  vec3 c = "
          << glslVec3(kDualCBase) << ";\n";
@@ -155,7 +162,7 @@ LoweredScene lowerScene(const Scene& scene) {
                                "): " + e.what(),
                            e.pointer());
     }
-    lo.worldBounds = transformBox(lo.localBounds, o.transform);
+    lo.worldBounds = worldBox(lo.localBounds, o.transform);
     lo.stepScale = part.stepScale;
     lo.featureScale = part.featureScale;
     s.bounds = first ? lo.worldBounds : unite(s.bounds, lo.worldBounds);
@@ -169,12 +176,29 @@ LoweredScene lowerScene(const Scene& scene) {
     const Namespacer rename(o.id);
     const std::string visible = objectUniformName(o.id, "visible");
     const std::string col = objectUniformName(o.id, "colour");
+    const std::string boxMin = objectUniformName(o.id, "boxMin");
+    const std::string boxMax = objectUniformName(o.id, "boxMax");
     src << "// object " << o.id << "\n" << rename(part.generatedSource);
-    src << "uniform float " << visible << ";\nuniform vec3 " << col << ";\n\n";
-    sdf << "  if (" << visible << " > 0.5) d = min(d, o" << o.id << "_sdf(p));\n";
-    colour << "  if (" << visible << " > 0.5) { float di = o" << o.id
-           << "_sdf(p); if (di < d) { d = di; c = " << col << "; id = " << o.id
-           << ".0; } }\n";
+    src << "uniform float " << visible << ";\nuniform vec3 " << col << ";\n";
+    if (cull) src << "uniform vec3 " << boxMin << ", " << boxMax << ";\n";
+    src << "\n";
+    const std::string objectSdf = "o" + std::to_string(o.id) + "_sdf(p)";
+    const std::string hit = "if (di < d) { d = di; c = " + col + "; id = " +
+                            std::to_string(o.id) + ".0; }";
+    if (cull) {
+      // Skipped while p is farther from the object's box than d, the nearest
+      // so far: the box distance is a lower bound of the object's field
+      // there, so the min is unchanged.
+      const std::string box = "float b = sceneBoxDist(p, " + boxMin + ", " + boxMax +
+                              "); if (b <= max(d, 0.0)) ";
+      sdf << "  if (" << visible << " > 0.5) { " << box << "d = min(d, " << objectSdf << "); }\n";
+      colour << "  if (" << visible << " > 0.5) { " << box << "{ float di = " << objectSdf
+             << "; " << hit << " } }\n";
+    } else {
+      sdf << "  if (" << visible << " > 0.5) d = min(d, " << objectSdf << ");\n";
+      colour << "  if (" << visible << " > 0.5) { float di = " << objectSdf << "; " << hit
+             << " }\n";
+    }
 
     lo.firstBinding = int(s.bindings.size());
     const std::string pointer = "/objects/" + std::to_string(o.id);
@@ -190,6 +214,13 @@ LoweredScene lowerScene(const Scene& scene) {
     lo.colourBinding = int(s.bindings.size());
     s.bindings.push_back(
         {col, "vec3", {o.colour[0], o.colour[1], o.colour[2]}, pointer, "colour"});
+    const BBox& w = lo.worldBounds;
+    lo.boxMinBinding = int(s.bindings.size());
+    s.bindings.push_back({boxMin, "vec3", {float(w.min.x), float(w.min.y), float(w.min.z)},
+                          pointer, "boxMin"});
+    lo.boxMaxBinding = int(s.bindings.size());
+    s.bindings.push_back({boxMax, "vec3", {float(w.max.x), float(w.max.y), float(w.max.z)},
+                          pointer, "boxMax"});
     lo.endBinding = int(s.bindings.size());
 
     for (fg::MeshTexture& m : part.meshes) {

@@ -9,6 +9,7 @@
 #include <QAction>
 #include <QDateTime>
 #include <QDockWidget>
+#include <QDoubleSpinBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFile>
@@ -380,12 +381,31 @@ void MainWindow::showObjects() {
     sections.emplace_back(lo.firstBinding, o->name);
   }
   parameters_->setBindings(bindings, ops, sections);
+  // The culling box follows the transform: shown, not edited.
+  for (const LoweredObject& lo : lowered_.objects)
+    for (const int i : {lo.boxMinBinding, lo.boxMaxBinding})
+      for (int k = 0; k < 3; ++k)
+        if (QDoubleSpinBox* box = parameters_->editor(i, k)) box->setEnabled(false);
 }
 
 // The edit sets its uniform; an object's visible flag or colour also goes to
-// its scene object and its Objects row.
+// its scene object and its Objects row, and its transform moves its culling
+// box (uniforms too, no compile).
 void MainWindow::parameterEdited(int index, std::vector<float> value) {
   viewport_->setParameter(index, value);
+  for (const LoweredObject& lo : lowered_.objects) {
+    if (index != lo.transformBinding || value.size() != 16) continue;
+    dualc::Mat4 localFromWorld;
+    for (int i = 0; i < 4; ++i)
+      for (int j = 0; j < 4; ++j) localFromWorld.m[i][j] = value[std::size_t(i * 4 + j)];
+    const dualc::BBox w = worldBox(lo.localBounds, localFromWorld.inverseRigid());
+    const std::vector<float> boxMin{float(w.min.x), float(w.min.y), float(w.min.z)};
+    const std::vector<float> boxMax{float(w.max.x), float(w.max.y), float(w.max.z)};
+    viewport_->setParameter(lo.boxMinBinding, boxMin);
+    viewport_->setParameter(lo.boxMaxBinding, boxMax);
+    parameters_->showValue(lo.boxMinBinding, boxMin);
+    parameters_->showValue(lo.boxMaxBinding, boxMax);
+  }
   if (pending_) return;
   for (const LoweredObject& lo : lowered_.objects) {
     SceneObject* o = doc_.scene.find(lo.id);

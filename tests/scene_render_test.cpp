@@ -3,7 +3,12 @@
 //     image of the graph alone;
 //  2. three objects side by side render each in its own colour;
 //  3. hiding an object removes it and showing it again restores the image,
-//     with no shader compile and no program link.
+//     with no shader compile and no program link;
+//  4. the per-object culling (P07 T1) leaves the images of 1 and 2 as the
+//     plain union draws them, and a culling-box upload neither compiles nor
+//     links;
+//  5. the CPU pick and the culled image agree, pixel by pixel, on which object
+//     is seen in a scene where the culling skips the far object.
 // Exits 77 (ctest: skipped) with no OpenGL 3.3 core context.
 //
 // usage: scene_render_test <graph.json>
@@ -11,6 +16,7 @@
 #include "graph_file.h"
 #include "graph_scene.h"
 #include "orbit_camera.h"
+#include "pick.h"
 #include "scene.h"
 #include "trace_renderer.h"
 
@@ -163,6 +169,78 @@ int run(const QString& graphPath) {
               r.linkCount(), r.compileCount(), links, compiles);
   check(r.linkCount() == links && r.compileCount() == compiles,
         "visibility and colour edits neither compile nor link");
+  r.setParameter(c = low.scene.bindings[std::size_t(low.objects[0].colourBinding)]);
+
+  // 4. A culling-box upload is a uniform edit. The last object's box moved
+  // off it culls it wherever the others are nearer than the box: the image
+  // changes. (The first object is never culled: nothing is nearer yet.)
+  fg::UniformBinding boxMin = low.scene.bindings[std::size_t(low.objects[2].boxMinBinding)];
+  fg::UniformBinding boxMax = low.scene.bindings[std::size_t(low.objects[2].boxMaxBinding)];
+  const fg::UniformBinding boxMin0 = boxMin, boxMax0 = boxMax;
+  boxMin.value[1] += 10.0f;
+  boxMax.value[1] += 10.0f;
+  r.setParameter(boxMin);
+  r.setParameter(boxMax);
+  check(differing(draw(r, cam), all) > 200, "the culling reads the box uniforms");
+  r.setParameter(boxMin0);
+  r.setParameter(boxMax0);
+  check(differing(draw(r, cam), all) == 0, "the box put back restores the image");
+  std::printf("scene_render_test: %d links, %d compiles after the box uploads\n",
+              r.linkCount(), r.compileCount());
+  check(r.linkCount() == links && r.compileCount() == compiles,
+        "a culling-box upload neither compiles nor links");
+
+  // The culled images against the plain union's (lowerScene(scene, false), the
+  // P01 shader): within the driver noise of step 1.
+  const auto unculled = [&](const Scene& scene, const QImage& culled, const char* what) {
+    if (!r.setScene(lowerScene(scene, false).scene, &error)) {
+      std::fprintf(stderr, "%s\n", error.c_str());
+      return check(false, what);
+    }
+    int most = 0;
+    const long long n = differing(draw(r, cam), culled, &most);
+    std::printf("scene_render_test: %s: culled vs plain union %lld px differ, by at most %d\n",
+                what, n, most);
+    check(n <= kW * kH / 1000 && most <= 1, what);
+  };
+  unculled(three, all, "three spheres, culled as unculled");
+  frameBounds(cam, plain.scene->bounds);
+  unculled(one, asScene, "the one-object scene, culled as unculled");
+
+  // 5. Two spheres one behind the other along the view axis: wherever the
+  // near one covers the far one, the culling skips the far one. Each pixel's
+  // pick names the object whose colour the image shows there.
+  Scene stack;
+  const SceneColour red = {0.9f, 0.1f, 0.1f}, blue = {0.1f, 0.1f, 0.9f};
+  stack.add("near", sphere).colour = red;
+  SceneObject& far = stack.add("far", parseGraphText("sphere(radius=1.2)", false));
+  far.colour = blue;
+  far.transform = dualc::Mat4::translation({0.4, 0.3, -4.0});
+  const LoweredScene stackLow = lowerScene(stack);
+  if (!r.setScene(stackLow.scene, &error))
+    return std::fprintf(stderr, "%s\n", error.c_str()), 1;
+  OrbitCamera view;
+  view.yaw = 0.0;
+  view.pitch = 0.0;
+  view.dist = 6.0;
+  const QImage seen = draw(r, view);
+  const ScenePicker picker(stack, stackLow);
+  long long agree = 0, disagree = 0, counts[3] = {0, 0, 0};
+  for (int y = 2; y < kH; y += 4)
+    for (int x = 2; x < kW; x += 4) {
+      const QRgb p = seen.pixel(x, y);
+      // The colour of a lit pixel names its object; the background is grey.
+      const int shown = qRed(p) > qBlue(p) + 40 ? 1 : qBlue(p) > qRed(p) + 40 ? 2 : 0;
+      const int picked = picker.pick(viewRay(view, x + 0.5, y + 0.5, kW, kH)).id;
+      ++counts[picked];
+      (shown == picked ? agree : disagree)++;
+    }
+  std::printf("scene_render_test: pick vs culled image: %lld agree, %lld disagree "
+              "(picked none %lld, near %lld, far %lld)\n",
+              agree, disagree, counts[0], counts[1], counts[2]);
+  check(counts[1] > 50 && counts[2] > 50, "both stacked spheres are seen and picked");
+  // Pixels on a silhouette may fall either side: allow a few.
+  check(disagree <= (agree + disagree) / 200, "the pick and the culled image agree");
   r.release();
   return failures ? 1 : 0;
 }

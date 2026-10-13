@@ -26,6 +26,11 @@ the owner's re-measurement (T3) covers rays that meet many boxes.
 - The pick (`src/pick.cpp`) and the culling agree on what is visible: a ctest picks
   through a scene where the culling skips the far object.
 
+#### Notes (P07.1, 2026-10-13)
+Built: `lowerScene` culling, box bindings, the depth-stacked family, `scene_render_test`
+steps 4–5 (pass on llvmpipe). The before/after snapshot run of the P01.4 scenes and the full
+gate were cut short when the development box's GL stack wedged (`HANDOFF_P07_TASK1.md`).
+
 ### T2. Asynchronous shader compile (E-21)
 
 A structural edit (open, add, delete, reload) no longer blocks the GUI thread for the GL

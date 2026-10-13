@@ -48,7 +48,11 @@ For each object:
    `/objects/<id>`: `u_o<id>_visible` (float) and `u_o<id>_colour` (vec3).
    `objectUniformName(id, key)` builds these names, so the panel (T2) and the shader agree.
 
-Then the generated source ends with the union and the colour lookup:
+5. Two more, for the culling (§ Culling, P07 T1): `u_o<id>_boxMin` and `u_o<id>_boxMax`
+   (vec3 each, keys `boxMin` and `boxMax`), the object's world box (`worldBounds`).
+
+Then the generated source ends with the union and the colour lookup (shown here
+without the culling, as `lowerScene(scene, false)` writes it; § Culling gives the default):
 
 ```glsl
 float sceneSDF(vec3 p) {
@@ -85,6 +89,53 @@ Scene-level values:
 
 An object that fails to build or compile throws `GraphError` with
 `object <id> (<name>): ` before DualC's message, and DualC's pointer. An empty scene throws.
+
+## Culling
+
+P07 T1, closes E-23. `lowerScene(scene)` (`cull` true, the default) writes each term of
+`sceneSDF` and `sceneColor` behind a test on the object's world box:
+
+```glsl
+float sceneBoxDist(vec3 p, vec3 lo, vec3 hi) { return length(max(max(lo - p, p - hi), 0.0)); }
+float sceneSDF(vec3 p) {
+  float d = 1e10;
+  if (u_o1_visible > 0.5) { float b = sceneBoxDist(p, u_o1_boxMin, u_o1_boxMax); if (b <= max(d, 0.0)) d = min(d, o1_sdf(p)); }
+  ...
+}
+```
+
+and the same test before `float di = o<id>_sdf(p)` in `sceneColor`.
+
+- **Why the min is unchanged.** An object's surface lies inside its padded trace box, and
+  the world box contains the moved trace box. Outside the box, a true SDF is at least the
+  distance to the box, so when that distance `b` is already larger than the nearest `d`, the
+  object cannot lower `d`. The term is skipped. `max(d, 0)` keeps an object evaluated
+  while `p` is inside its box (`b` = 0), even when `d` is already negative.
+- **Non-metric fields** (TPMS) are not bounded below by the box distance. Skipping one is
+  still safe for the trace: the value returned is at most `b`, so a step cannot enter the
+  skipped object's box, where all of its surface is. Only the step length can change, not
+  the surface found. The TPMS-in-box scenes measured unchanged on llvmpipe
+  (§ Verified (P07 T1)).
+- **No clip.** A first version also clipped each evaluated field to its box,
+  `max(o_sdf(p), b)`. It changed the gyroid_box image (2875 px, up to 76 levels, on
+  llvmpipe): that graph's own field is below the box distance near the box's edges. The
+  clip was dropped. An object whose surface leaves its own box is not supported either way;
+  the pick clips each object to its own box (§ Picking), the culling only skips it.
+- **Order.** Objects are tested in scene order. The first visible object is always
+  evaluated (`d` is 1e10). A near object listed first culls the most.
+- **The box is a binding**, `nodePointer` `/objects/<id>`, as the visible flag is. A move
+  uploads `worldBox(localBounds, worldFromLocal)` (`src/scene.h`) and compiles nothing
+  (`scene_render_test`). The window does this on a `matrix` edit in the Parameters dock
+  (`MainWindow::parameterEdited`). The dock shows `boxMin` and `boxMax` greyed out. A
+  re-lowering keeps them with the object's other uploaded values, so they stay with the
+  kept transform. A box moved off its object is a bug: the object vanishes where others
+  are nearer.
+- **Hidden objects** still skip on `u_o<id>_visible` first, as before.
+- **The scene trace box** (`bounds`) is unchanged: still the union, hidden objects included.
+
+`lowerScene(scene, false)` writes P01's plain union, byte for byte. It exists so the
+tests can compare the culled image with the plain one. The box bindings are emitted in both
+modes, so binding indices do not depend on it; unused, they upload to location −1.
 
 ## Why each object compiles on its own
 
@@ -128,8 +179,8 @@ both stay put across three hides, three shows and a recolour.
 
 The transform binding holds DualC's `localFromWorld`, row-major
 (`worldFromLocal.inverseRigid()`), not the object's `transform`. A move written as a
-uniform edit must upload the inverse. The trace box stays as lowered until the next
-`lowerScene`, so a moved object can leave it.
+uniform edit must upload the inverse, and the object's culling box (§ Culling). The trace
+box stays as lowered until the next `lowerScene`, so a moved object can leave it.
 
 ## Where it is used
 
