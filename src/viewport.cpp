@@ -360,6 +360,11 @@ void Viewport::setSelectedObject(int id) {
   update();
 }
 
+void Viewport::setSection(const TraceRenderer::SectionPlanes& s) {
+  renderer_.setSection(s);  // read at the next render, no GL call now
+  update();
+}
+
 void Viewport::pollGpuTimers() {
   if (!glReady_) return gpuPoll_.stop();
   std::vector<std::pair<TimedFrame, double>> done;

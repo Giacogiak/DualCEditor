@@ -49,7 +49,7 @@ expression `dualc_field_view` uses:
 | `uMetricSDF` | 1 if `stepScale ≥ 0.999`, else 0 |
 | `uStepMin`, `uHmem` | min(diag × 0.002, feat × 0.003) |
 | `uStepMax` | min(diag × 0.100, feat × 0.350) |
-| `uClip[3]`, `uClipMask` | zeros, 0 (section planes off) |
+| `uClip[3]`, `uClipMask` | from `TraceRenderer::SectionPlanes`, built each frame from the bounds as dualc_field_view does (zeros, 0 with no section on: the image is then exactly the unclipped one). The window's Section toolbar sets them (`docs/command_reference/01-viewport.md` § Section). |
 
 Here `diag` is the diagonal of the trace box, and `feat` is `scene.featureScale` clamped
 to `diag` (or `diag` itself when it is 0). Each `GlslScene::bindings` entry goes up once

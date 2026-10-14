@@ -155,6 +155,10 @@ class MainWindow : public QMainWindow {
   Viewport* viewport() const { return viewport_; }
   ParameterPanel* parameters() const { return parameters_; }
   TransformPanel* transformPanel() const { return transform_; }
+  // The Section toolbar's actions: the X, Y, Z toggles (axis 0..2) and the
+  // move buttons (dir -1 or +1). Tests drive them.
+  QAction* sectionAxisAction(int axis) const { return sectionAxis_[axis]; }
+  QAction* sectionMoveAction(int dir) const { return dir < 0 ? sectionMinus_ : sectionPlus_; }
   ObjectsPanel* objects() const { return objects_; }
   // The permanent status-bar text: compile and frame times.
   QString timingText() const;
@@ -287,6 +291,18 @@ class MainWindow : public QMainWindow {
   QProgressDialog* exportProgress_ = nullptr;
   QAction* exportSelectedAction_ = nullptr;
   QAction* exportVisibleAction_ = nullptr;
+
+  // The Section toolbar: one cut at a time, along X, Y or Z, moved in steps
+  // of a twentieth of the trace box along that axis (§ Section in the
+  // command reference). Viewing only, not in the document or the scene file.
+  void buildSectionBar();
+  void setSectionAxis(int axis, bool on);
+  void moveSection(int steps);
+  void showSection();
+  QAction* sectionAxis_[3] = {nullptr, nullptr, nullptr};
+  QAction* sectionMinus_ = nullptr;
+  QAction* sectionPlus_ = nullptr;
+  QLabel* sectionLabel_ = nullptr;
   QString exportPath_;  // the last export's file
   int watertightDepth_;
   Doc doc_;  // on screen

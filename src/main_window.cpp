@@ -15,6 +15,7 @@
 #include "viewport.h"
 
 #include <QAction>
+#include <QActionGroup>
 #include <QDateTime>
 #include <QDir>
 #include <QElapsedTimer>
@@ -35,6 +36,7 @@
 #include <QProgressDialog>
 #include <QStandardPaths>
 #include <QThread>
+#include <QToolBar>
 #include <QWidgetAction>
 #include <QStatusBar>
 #include <QUndoStack>
@@ -271,6 +273,12 @@ MainWindow::MainWindow(float previewScale, QWidget* parent)
   viewMenu->addAction(transformDock->toggleViewAction());
   viewMenu->addAction(paramDock->toggleViewAction());
   viewMenu->addAction(dock->toggleViewAction());
+  buildSectionBar();
+  QMenu* sectionMenu = viewMenu->addMenu("&Section");
+  for (QAction* a : sectionAxis_) sectionMenu->addAction(a);
+  sectionMenu->addSeparator();
+  sectionMenu->addAction(sectionMinus_);
+  sectionMenu->addAction(sectionPlus_);
 
   statusBar()->showMessage("No graph open");
   timing_ = new QLabel(this);
@@ -822,6 +830,74 @@ void MainWindow::revertDocument(bool opened) {
     while (stack->index() < shownIndex_ && stack->canRedo()) stack->redo();
   }
   adopting_ = false;
+}
+
+// A toolbar under the menu: "Section  [X] [Y] [Z]  [−] [+]  x = 1.20 mm".
+// The toggles are exclusive but can all be off. The cut sits at a fraction of
+// the trace box along its axis (TraceRenderer::SectionPlanes::pos01), starting
+// at the middle; a move is a twentieth of the box. The keys + and − move it.
+void MainWindow::buildSectionBar() {
+  QToolBar* bar = addToolBar("Section");
+  bar->setObjectName("sectionBar");
+  bar->setMovable(false);
+  bar->addWidget(new QLabel("Section ", bar));
+  auto* axes = new QActionGroup(this);
+  axes->setExclusionPolicy(QActionGroup::ExclusionPolicy::ExclusiveOptional);
+  for (int axis = 0; axis < 3; ++axis) {
+    QAction* a = bar->addAction(QString("XYZ"[axis]));
+    a->setCheckable(true);
+    a->setStatusTip(QString("Cut the view at a plane normal to %1").arg("XYZ"[axis]));
+    axes->addAction(a);
+    connect(a, &QAction::toggled, this, [this, axis](bool on) { setSectionAxis(axis, on); });
+    sectionAxis_[axis] = a;
+  }
+  bar->addSeparator();
+  sectionMinus_ = bar->addAction(QString::fromUtf8("−"), this, [this] { moveSection(-1); });
+  sectionMinus_->setShortcut(QKeySequence(Qt::Key_Minus));
+  sectionMinus_->setStatusTip("Move the section toward the low end of its axis (−)");
+  sectionPlus_ = bar->addAction("+", this, [this] { moveSection(+1); });
+  sectionPlus_->setShortcut(QKeySequence(Qt::Key_Plus));
+  sectionPlus_->setStatusTip("Move the section toward the high end of its axis (+)");
+  for (QAction* a : {sectionMinus_, sectionPlus_}) a->setShortcutContext(Qt::WindowShortcut);
+  sectionLabel_ = new QLabel(bar);
+  sectionLabel_->setObjectName("sectionLabel");
+  sectionLabel_->setContentsMargins(8, 0, 0, 0);
+  bar->addWidget(sectionLabel_);
+  showSection();
+}
+
+void MainWindow::setSectionAxis(int axis, bool on) {
+  TraceRenderer::SectionPlanes s = viewport_->section();
+  for (int a = 0; a < 3; ++a) s.on[a] = on && a == axis;  // one cut at a time
+  viewport_->setSection(s);
+  showSection();
+}
+
+void MainWindow::moveSection(int steps) {
+  TraceRenderer::SectionPlanes s = viewport_->section();
+  for (int a = 0; a < 3; ++a) {
+    if (!s.on[a]) continue;
+    s.pos01[a] = std::clamp(s.pos01[a] + 0.05f * float(steps), 0.0f, 1.0f);
+  }
+  if (!s.any()) return;
+  viewport_->setSection(s);
+  showSection();
+}
+
+void MainWindow::showSection() {
+  const TraceRenderer::SectionPlanes& s = viewport_->section();
+  const bool on = s.any();
+  sectionMinus_->setEnabled(on);
+  sectionPlus_->setEnabled(on);
+  if (!on) return sectionLabel_->setText("off");
+  for (int a = 0; a < 3; ++a) {
+    if (!s.on[a]) continue;
+    const dualc::BBox b = viewport_->hasScene() ? viewport_->scene().bounds : dualc::BBox{};
+    const double lo = a == 0 ? b.min.x : (a == 1 ? b.min.y : b.min.z);
+    const double hi = a == 0 ? b.max.x : (a == 1 ? b.max.y : b.max.z);
+    const double cut = lo + double(s.pos01[a]) * (hi - lo);
+    sectionLabel_->setText(QString("%1 = %2 mm").arg(QChar("xyz"[a])).arg(cut, 0, 'f', 2));
+  }
 }
 
 void MainWindow::selectObject(int id) {

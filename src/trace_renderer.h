@@ -67,6 +67,20 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   // render (a lowered scene's shader has it; a single graph's ignores it).
   void setSelectedObject(int id) { selected_ = id; }
 
+  // Section planes, the trace shader's uClip[3]/uClipMask: up to one
+  // axis-aligned cut per axis, at pos01 of the trace box's extent along that
+  // axis, keeping the low side (the high side when flipped). Set at each
+  // render from the bounds, so a relink or a move keeps the cut. Viewing
+  // only: the field, the pick and the export never see it.
+  struct SectionPlanes {
+    bool on[3] = {false, false, false};
+    float pos01[3] = {0.5f, 0.5f, 0.5f};
+    bool flip[3] = {false, false, false};
+    bool any() const { return on[0] || on[1] || on[2]; }
+  };
+  void setSection(const SectionPlanes& s) { section_ = s; }
+  const SectionPlanes& section() const { return section_; }
+
   // Draw one width x height frame into the bound framebuffer.
   void render(int width, int height, const OrbitCamera& cam);
 
@@ -117,4 +131,5 @@ class TraceRenderer : protected QOpenGLFunctions_3_3_Core {
   float stepScale_ = 1.0f;
   float featureScale_ = 0.0f;
   int selected_ = 0;
+  SectionPlanes section_;
 };

@@ -147,9 +147,23 @@ void TraceRenderer::render(int width, int height, const OrbitCamera& cam) {
   setUniform1f("uStepMax", float(std::min(diag * 0.100, feat * 0.350)));
   setUniform1f("uHmem", stepMin);  // FD normals use the smallest step
 
-  const float noClip[12] = {};
-  glUniform4fv(glGetUniformLocation(program_, "uClip"), 3, noClip);
-  setUniform1i("uClipMask", 0);
+  // Section planes, built from the bounds as dualc_field_view does: n is the
+  // axis (negated on flip), d = -dot(n, cut point). uClipMask 0 leaves the
+  // image exactly as without planes (clippedSDF == sceneSDF).
+  float clip[12] = {};
+  int clipMask = 0;
+  const double lo[3] = {bounds_.min.x, bounds_.min.y, bounds_.min.z};
+  const double hi[3] = {bounds_.max.x, bounds_.max.y, bounds_.max.z};
+  for (int a = 0; a < 3; ++a) {
+    if (!section_.on[a]) continue;
+    clipMask |= 1 << a;
+    const double cut = lo[a] + double(section_.pos01[a]) * (hi[a] - lo[a]);
+    const float s = section_.flip[a] ? -1.0f : 1.0f;
+    clip[a * 4 + a] = s;
+    clip[a * 4 + 3] = -s * float(cut);
+  }
+  glUniform4fv(glGetUniformLocation(program_, "uClip"), 3, clip);
+  setUniform1i("uClipMask", clipMask);
   setUniform1f(kSelectedUniform, float(selected_));
 
   glBindVertexArray(vao_);

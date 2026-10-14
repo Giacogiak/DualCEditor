@@ -96,6 +96,11 @@ class Viewport : public QOpenGLWidget {
   void setSelectedObject(int id);
   int selectedObject() const { return selected_; }
 
+  // The section planes (TraceRenderer::SectionPlanes): a uniform-only change,
+  // repainted at full resolution, kept across setScene.
+  void setSection(const TraceRenderer::SectionPlanes& s);
+  const TraceRenderer::SectionPlanes& section() const { return renderer_.section(); }
+
   // Program links and shader compiles attempted so far, and the GL compile +
   // link time of the scene on screen, in ms.
   int linkCount() const { return renderer_.linkCount(); }

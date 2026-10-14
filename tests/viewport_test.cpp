@@ -15,6 +15,7 @@
 #include <QApplication>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QImage>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QSurfaceFormat>
@@ -284,6 +285,27 @@ int main(int argc, char* argv[]) {
   key(Qt::Key_F, 41, "F");
   check((vp.camera().target - framed).norm() < 1e-12, "shift+F frames too");
   idle(2 * Viewport::kSettleMs);
+
+  // A section plane: a uniform-only change that repaints, cuts the image,
+  // and leaves it exactly as before once off.
+  {
+    const int links = vp.linkCount();
+    const QImage whole = vp.grabFramebuffer();
+    TraceRenderer::SectionPlanes s;
+    s.on[0] = true;
+    vp.setSection(s);
+    idle(2 * Viewport::kSettleMs);
+    const QImage cut = vp.grabFramebuffer();
+    check(cut != whole, "a section on x changes the image");
+    s.pos01[0] = 0.25f;
+    vp.setSection(s);
+    idle(2 * Viewport::kSettleMs);
+    check(vp.grabFramebuffer() != cut, "moving the section changes the image");
+    vp.setSection(TraceRenderer::SectionPlanes{});
+    idle(2 * Viewport::kSettleMs);
+    check(vp.grabFramebuffer() == whole, "the section off restores the image exactly");
+    check(vp.linkCount() == links, "a section links no program");
+  }
 
   std::vector<double> fullMs;
   for (const Frame& f : frames)

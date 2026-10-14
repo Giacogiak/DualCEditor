@@ -187,7 +187,8 @@ the pointer is a character offset.
 | `File` menu | `Open…` (`Ctrl+O`), `Add…`, `Save Scene` (`QKeySequence::Save`, `Ctrl+S`), `Save Scene As…` (`QKeySequence::SaveAs`, `Ctrl+Shift+S`), `Export Selected Object…` (`Ctrl+E`, greyed out with nothing selected), `Export Visible Scene…` (`Ctrl+Shift+E`), both greyed out while an export runs, `Quit` (`Ctrl+Q`, the platform's Quit shortcut). See *Scene files* and *Export*. |
 | `Edit` menu | `Undo <step>` (`QKeySequence::Undo`, `Ctrl+Z`) and `Redo <step>` (`QKeySequence::Redo`: `Ctrl+Shift+Z` on Linux, `Ctrl+Y` on Windows), named after the step they undo or redo; greyed out with nothing to undo or redo. `Rename Object` (`F2`) and `Delete Object`: act on the selected object, greyed out with nothing selected. See *Undo and redo* below. |
 | `Operations` menu | `Union`, `Intersection`, `Difference`, `Xor`, `Smooth Union`, `Smooth Intersection`, `Smooth Difference` (one per DualC boolean, see *Operation list*), and the `Blend k` spin box of the smooth ones, greyed out with fewer than two objects selected (see *Booleans* below); `Fill with TPMS…` and `Fill with Lattice…`, greyed out with no object selected (see *Fills* below). No shortcut. |
-| `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. |
+| `View` menu | `Objects`, `Transform`, `Parameters` and `Log`: show or hide each dock. `Section`: the same `X`, `Y`, `Z`, `−` and `+` as the toolbar. |
+| Section toolbar | Under the menu: `Section [X] [Y] [Z] [−] [+] x = 1.20 mm`. A cut through the scene along one axis, moved in steps. See *Section* below. |
 | Status bar, left | The last load: `Loaded <file>: K objects, N nodes, M parameters` (the whole scene's counts, the per-object `transform` node and `visible`/`colour` uniforms included), `Removed <name>`, or the last error. |
 | Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
 | Transform dock | On the right, between Objects and Parameters. The selected object's position, rotation and scale, typed in millimetres and degrees. See *Transform* below. |
@@ -414,6 +415,24 @@ artefacts. Save it in the file to recompute them.
 Keys typed into a spin box go to it, not to the viewport. Click the viewport to give it back
 the keys (`F`).
 
+## Section
+
+A section cuts the view at a plane normal to one axis and shows the inside: the thin
+walls of a TPMS, the struts of a lattice, the skin of a fill. It is the trace shader's
+`uClip` planes (DualC's own viewers have the same), so it is viewing only: the field, the
+pick, the scene file and the export never see it.
+
+| Control | Effect |
+|---|---|
+| `X`, `Y` or `Z` button (toolbar or `View ▸ Section`) | Cut at a plane normal to that axis, through the middle of the trace box, keeping the low side. One axis at a time: pressing another moves the cut to it; pressing the lit one turns the section off. |
+| `−`, `+` buttons, or the keys | Move the plane a twentieth of the trace box along its axis, toward its low or high end, clamped to the box. Greyed out with no section on. |
+| Label | The plane's position along its axis, in scene units (`x = 1.20 mm`), or `off`. |
+
+Every change is a uniform, so there is no compile; the view previews and settles as for a
+camera move. The cut face is lit like any surface. Turning the section off restores the
+exact image. The section is kept across a reload, an add and a `.dcscene` open, and is not
+saved.
+
 ## Timing
 
 | Field | Measured as |
@@ -479,6 +498,7 @@ The same semantics as DualC's viewers (`OrbitState` in `examples/raymarch_gl`), 
 | Middle-drag, or Shift + left-drag | Pan (from the same drag distance). The target slides in the view plane, and the point at the target follows the cursor. Yaw, pitch and distance are kept. |
 | `G`, `R`, `S`, `X`, `Y`, `Z`, `Esc` | The transform gizmo, with an object selected (§ Transform). |
 | `F` (either case) | Frame the bounds (does nothing while no graph is on screen). The target goes to the trace box centre and the distance to 1.3 × its diagonal. Yaw and pitch are kept. |
+| `+`, `−` (main row or keypad) | Move the section plane, when one is on (§ Section). Window shortcuts: they work wherever the focus is. |
 
 Keys are matched by the character they type (`QKeyEvent::text()`), not by key position.
 `F` is the key labelled F on any layout, Belgian AZERTY included. The viewport takes

@@ -15,6 +15,7 @@
 #include "parameter_panel.h"
 #include "viewport.h"
 
+#include <QAction>
 #include <QApplication>
 #include <QDoubleSpinBox>
 #include <QElapsedTimer>
@@ -262,6 +263,31 @@ int main(int argc, char* argv[]) {
           "a vec3 component edit reaches its binding");
     check(vp.grabFramebuffer() != centred, "a vec3 edit changes the image");
     check(vp.linkCount() == before, "a vec3 edit links no program");
+  }
+
+  // The Section toolbar: X on cuts the image at the box's middle, + moves the
+  // cut, off restores the image; one toggle at a time; no link.
+  {
+    quiet(vp);
+    const int links = vp.linkCount();
+    const QImage whole = vp.grabFramebuffer();
+    w.sectionAxisAction(0)->setChecked(true);
+    quiet(vp);
+    check(vp.section().on[0] && !vp.section().on[1] && !vp.section().on[2],
+          "the X toggle turns the x section on");
+    const QImage cut = vp.grabFramebuffer();
+    check(cut != whole, "the x section cuts the image");
+    w.sectionMoveAction(+1)->trigger();
+    quiet(vp);
+    check(std::abs(vp.section().pos01[0] - 0.55f) < 1e-6f && vp.grabFramebuffer() != cut,
+          "+ moves the section a twentieth of the box and repaints");
+    w.sectionAxisAction(2)->setChecked(true);
+    check(vp.section().on[2] && !vp.section().on[0], "the Z toggle replaces the x cut");
+    w.sectionAxisAction(2)->setChecked(false);
+    quiet(vp);
+    check(!vp.section().any() && vp.grabFramebuffer() == whole,
+          "the section off restores the image exactly");
+    check(vp.linkCount() == links, "the section links no program");
   }
 
   if (failures) {

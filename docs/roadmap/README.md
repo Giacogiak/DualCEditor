@@ -18,6 +18,10 @@ on the GTX, both below and both in that checklist's last section.
   generated OBJ), not the import. Found on the way: an imported mesh file is not watched,
   by design (`../design/07-mesh-import.md`), so a mesh edited on disk needs a re-drop;
   graphs reload on save. Open, if wanted: watch mesh files too.
+- *A section tool is missing: X/Y/Z toggles and −/+ buttons to move the cut.* Done the same
+  day as a toolbar and `View ▸ Section`, on the trace shader's existing `uClip` planes
+  (`../command_reference/01-viewport.md` § Section; `viewport` and `parameter_dock`
+  ctests). Viewing only, not saved.
 
 Done: P06, export (`../../plan/70_P06_export.md`, `../../HANDOFF_P06_TASK1.md`).
 `File ▸ Export Selected Object…` (`Ctrl+E`) and `Export Visible Scene…` (`Ctrl+Shift+E`)
