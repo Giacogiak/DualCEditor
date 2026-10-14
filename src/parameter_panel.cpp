@@ -6,6 +6,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSignalBlocker>
+#include <QVBoxLayout>
 
 namespace fg = dce::fieldgraph;
 
@@ -51,12 +52,29 @@ ParameterPanel::ParameterPanel(QWidget* parent) : QScrollArea(parent) {
 
 void ParameterPanel::setBindings(const std::vector<fg::UniformBinding>& bindings,
                                  const std::map<std::string, std::string>& nodeOps,
-                                 const std::vector<std::pair<int, QString>>& sections) {
+                                 const std::vector<Section>& sections) {
   editors_.clear();
+  sections_.clear();
   auto* content = new QWidget;
-  auto* form = new QFormLayout(content);
-  form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-  if (bindings.empty()) form->addRow(new QLabel("No parameters"));
+  auto* column = new QVBoxLayout(content);
+  column->setContentsMargins(0, 0, 0, 0);
+  // Each object's rows sit in their own widget, so the selection filter can
+  // hide a whole object at once. Rows before the first section (a scene with
+  // no objects) go in a widget that is never hidden.
+  auto newForm = [&](int objectId) {
+    auto* holder = new QWidget(content);
+    auto* form = new QFormLayout(holder);
+    form->setContentsMargins(0, 0, 0, 0);
+    form->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
+    column->addWidget(holder);
+    if (objectId != 0) sections_.emplace_back(objectId, holder);
+    return form;
+  };
+  QFormLayout* form = newForm(0);
+  emptyNote_ = new QLabel("No parameters", content);
+  column->addWidget(emptyNote_);
+  column->addStretch(1);
+  emptyNote_->setVisible(bindings.empty());
 
   std::string group;
   for (std::size_t i = 0; i < bindings.size(); ++i) {
@@ -66,9 +84,11 @@ void ParameterPanel::setBindings(const std::vector<fg::UniformBinding>& bindings
         op != nodeOps.end() ? QString::fromStdString(op->second) : QString();
     const QString pointer = QString::fromStdString(b.nodePointer);
     bool newSection = false;
-    for (const auto& [at, title] : sections) {
-      if (at != int(i)) continue;
-      auto* heading = new QLabel(QString("<big><b>%1</b></big>").arg(title.toHtmlEscaped()));
+    for (const Section& s : sections) {
+      if (s.firstBinding != int(i)) continue;
+      form = newForm(s.objectId);
+      auto* heading =
+          new QLabel(QString("<big><b>%1</b></big>").arg(s.title.toHtmlEscaped()));
       heading->setTextFormat(Qt::RichText);
       form->addRow(heading);
       newSection = true;
@@ -126,6 +146,21 @@ void ParameterPanel::setBindings(const std::vector<fg::UniformBinding>& bindings
     form->addRow(label, field);
   }
   setWidget(content);  // deletes the previous content and its editors
+  applyFilter();
+}
+
+void ParameterPanel::showObject(int id) {
+  shown_ = id;
+  applyFilter();
+}
+
+// An id that names no section shows everything: the selection can be an
+// object whose bindings are not on screen yet (a scene being relinked).
+void ParameterPanel::applyFilter() {
+  bool known = false;
+  for (const auto& [id, holder] : sections_) known = known || id == shown_;
+  const bool all = shown_ == 0 || !known;
+  for (const auto& [id, holder] : sections_) holder->setVisible(all || id == shown_);
 }
 
 QDoubleSpinBox* ParameterPanel::editor(int index, int component) const {

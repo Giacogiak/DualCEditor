@@ -9,6 +9,16 @@ gathered as one checklist in `04-gtx-batch-2026-10-13.md`; E-28's verdict
 (`../decisions/03-deferred.md`); the cold-compile question and the `main_window` failure
 on the GTX, both below and both in that checklist's last section.
 
+**Owner feedback after the plan (2026-10-14),** from a session in the live editor:
+- *The Parameters dock should follow the selection like the Transform dock, one object at
+  a time, instead of listing every object and scrolling.* Done the same day: with an
+  object selected the dock shows its section only, with none it shows all
+  (`../command_reference/01-viewport.md` § Parameters, `objects_panel` ctest).
+- *A faceted, torn mesh sphere* in the demo scene was the demo file (a bad text edit of a
+  generated OBJ), not the import. Found on the way: an imported mesh file is not watched,
+  by design (`../design/07-mesh-import.md`), so a mesh edited on disk needs a re-drop;
+  graphs reload on save. Open, if wanted: watch mesh files too.
+
 Done: P06, export (`../../plan/70_P06_export.md`, `../../HANDOFF_P06_TASK1.md`).
 `File ▸ Export Selected Object…` (`Ctrl+E`) and `Export Visible Scene…` (`Ctrl+Shift+E`)
 open a dialog: the file, whose extension picks STL, 3MF or OBJ; the depth, with an
@@ -54,7 +64,11 @@ The window stays responsive through them.
 fails one check, "the .fld renders a different image" (`tests/main_window_test.cpp:220`),
 at 8b9baf8 and at P07.1, so before P07. It passes on the development box. To be
 investigated with the GTX in the loop. Until then the GTX ctest is one short (12/13 at 4b89008). It does not
-block P07, and is still open after it.
+block P07, and is still open after it. **A lead (2026-10-14):** the same check fails on
+the development box under llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1 ctest -R main_window`), with
+other paint-timing checks, on a loaded box. Seen once at 0c08ec9 plus the Parameters-dock
+change, not at an earlier commit; if it repeats on a quiet box, the failure can be chased
+here without the GTX.
 
 Done: P07, render scaling (`../../plan/35_P07_render_scaling.md`), added by P02 and run
 before P03.

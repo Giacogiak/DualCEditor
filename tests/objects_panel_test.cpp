@@ -9,7 +9,10 @@
 
 #include "main_window.h"
 #include "objects_panel.h"
+#include "parameter_panel.h"
 #include "viewport.h"
+
+#include <QDoubleSpinBox>
 
 #include <QApplication>
 #include <QDropEvent>
@@ -206,6 +209,20 @@ int main(int argc, char* argv[]) {
   QObject::connect(&w, &MainWindow::selectionChanged, [&](int id) { signalled = id; });
   panel.setCurrentItem(panel.row(cId));
   check(w.selectedObject() == cId && signalled == cId, "selecting a row selects the object");
+  {
+    // The Parameters dock follows: c's rows stay on screen, a's are hidden,
+    // and a's editors still exist at their binding index.
+    const ParameterPanel& params = *w.parameters();
+    int cFirst = -1, aFirst = -1;
+    for (const LoweredObject& lo : w.lowered().objects) {
+      if (lo.id == cId) cFirst = lo.firstBinding;
+      if (lo.id == idAt(w, 0)) aFirst = lo.firstBinding;
+    }
+    check(params.shownObject() == cId && cFirst >= 0 && aFirst >= 0 &&
+              params.editor(cFirst) && params.editor(cFirst)->isVisibleTo(&params) &&
+              params.editor(aFirst) && !params.editor(aFirst)->isVisibleTo(&params),
+          "the Parameters dock shows the selected object's rows only");
+  }
   quiet(vp);
   check(vp.selectedObject() == cId && vp.grabFramebuffer() != three,
         "a row selected in the panel is highlighted in the viewport");

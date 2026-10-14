@@ -834,6 +834,7 @@ void MainWindow::selectObject(int id) {
   const bool moved = id != selected_;
   selected_ = id;
   showPose();
+  parameters_->showObject(id);  // the dock follows the selection, as Transform does
   if (moved) emit selectionChanged(id);
 }
 
@@ -1053,7 +1054,7 @@ void MainWindow::showObjects() {
   std::vector<fg::UniformBinding> bindings =
       viewport_->hasScene() ? viewport_->scene().bindings : std::vector<fg::UniformBinding>{};
   std::map<std::string, std::string> ops;
-  std::vector<std::pair<int, QString>> sections;
+  std::vector<ParameterPanel::Section> sections;
   for (const LoweredObject& lo : lowered_.objects) {
     const SceneObject* o = doc_.scene.find(lo.id);
     if (!o || lo.endBinding > int(bindings.size())) continue;
@@ -1066,9 +1067,10 @@ void MainWindow::showObjects() {
       std::string& pointer = bindings[std::size_t(i)].nodePointer;
       if (pointer != prefix) pointer = prefix + pointer;
     }
-    sections.emplace_back(lo.firstBinding, o->name);
+    sections.push_back({lo.firstBinding, lo.id, o->name});
   }
   parameters_->setBindings(bindings, ops, sections);
+  parameters_->showObject(selected_);
   // The culling box follows the transform: shown, not edited.
   for (const LoweredObject& lo : lowered_.objects)
     for (const int i : {lo.boxMinBinding, lo.boxMaxBinding})

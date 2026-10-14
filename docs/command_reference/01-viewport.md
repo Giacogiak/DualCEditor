@@ -192,7 +192,7 @@ the pointer is a character offset.
 | Objects dock | On the right, above Transform. One row per object. See *Objects* below. |
 | Transform dock | On the right, between Objects and Parameters. The selected object's position, rotation and scale, typed in millimetres and degrees. See *Transform* below. |
 | Status bar, right | Always shown: `compile C ms   frame F ms`, then `   preview P ms` once a preview frame has been timed. `-` means not measured yet. While a scene compiles it reads `compile …`. See *Timing* and *While a scene compiles* below. |
-| Parameters dock | On the right. One editor per parameter of the scene on screen. See *Parameters* below. |
+| Parameters dock | On the right. The parameters of the selected object, or of every object when none is selected. See *Parameters* below. |
 | Log dock | At the bottom, five lines high, read-only. One line per load (with its shader compile ms), reload and error. |
 
 Each dock can be closed, floated or moved to another side. With both docks open, the default
@@ -376,7 +376,10 @@ error), the step is undone again, the error goes to the status bar and the log, 
 The Parameters dock lists the binding table of the scene's shader (`GlslScene::bindings`):
 every value that the generated shader reads from a uniform. They are grouped under their
 object's name, then under their node, shown as its op and its pointer with the object's in
-front (`onion /objects/1/root/in/0/in/1`). Each object ends with its own `object
+front (`onion /objects/1/root/in/0/in/1`). **Like the Transform dock, it follows the
+selection:** with an object selected (a click in the viewport or in the Objects dock) only
+that object's section is listed; with no selection (`Esc`, or a click on empty space) every
+object's is, one after the other. The scroll bar stays for a long object. Each object ends with its own `object
 /objects/<id>` group: `matrix` (the object's local-from-world transform), `visible` (1 or 0)
 and `colour` (linear RGB), then `boxMin` and `boxMax`, the object's world box that the
 culling reads when the object is costly (greyed out: an edit of `matrix` moves them, nothing else edits them;
