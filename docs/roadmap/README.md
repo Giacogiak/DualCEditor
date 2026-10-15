@@ -1,137 +1,92 @@
 # Roadmap
 
+How the editor got here and what is next. The phased plan that built it (P00 to P07) ran
+from 2026-10-09 to 2026-10-13 and is recorded phase by phase in `05-plan-record/`; the
+numbers it rests on are in `02-measurements.md`, its verdict on the spikes in
+`03-go-no-go.md`.
+
 ## Current focus
 
-**The plan is done (2026-10-13).** Every phase in `../../plan/README.md` (P00 to P07) has
-run, and P06 was the last. No phase is next until the owner adds one. Still open: the GTX
-checks queued for the owner's next laptop session (P03, P04, P05, and P06's export timings),
-gathered as one checklist in `04-gtx-batch-2026-10-13.md`; E-28's verdict
-(`../decisions/03-deferred.md`); the cold-compile question and the `main_window` failure
-on the GTX, both below and both in that checklist's last section.
+**No phase is running (2026-10-14).** The plan is done: every phase in
+`05-plan-record/README.md` has run, P06 was the last, and no phase is next until the owner
+adds one. What is open:
+
+- **The GTX checks queued by P03–P06** (E-04), one laptop session:
+  `04-gtx-batch-2026-10-13.md`. It decides E-22 (several imported meshes, § 5) and E-28
+  (the octet fill's lag at the start of a drag, § 7), asks for a second cold-compile sample
+  and the `main_window` output (§ 9), and lists the window checks on any machine that no
+  test covers (§ 10).
+- **Cold shader compiles are longer than P01.4's** (P07 T3), cause unknown: 10 primitives
+  1137 ms against 670, 3 TPMS-in-box 1897 against 1210, and the window's compile thread
+  2567 ms for the same scene. The window stays responsive through them. A first check that
+  needs no GTX: diff the 10-primitive fragment source at b011b24 and at HEAD on the
+  development box (`05-plan-record/04-p07-render-scaling.md` § T3).
+- **The `main_window` ctest fails one check on the GTX** (owner, 2026-10-13): "the .fld
+  renders a different image" (`tests/main_window_test.cpp:220`), at 8b9baf8 and at every
+  commit since, so before P07; it passes on the development box. The GTX ctest is one
+  short (12/13 at 4b89008). To be investigated with the GTX in the loop. **A lead
+  (2026-10-14):** the same check fails on the development box under llvmpipe
+  (`LIBGL_ALWAYS_SOFTWARE=1 ctest -R main_window`), with other paint-timing checks, on a
+  loaded box; seen once at 0c08ec9 plus the Parameters-dock change, not at an earlier
+  commit. If it repeats on a quiet box, the failure can be chased here without the GTX.
+  P07 T2 noted a candidate: the test's `quiet()` waits 500 ms with no paint, which a slow
+  compile can outlast. The paint-timing family is load-sensitive on this box in general:
+  on 2026-10-14 `viewport_no_preview` failed "a held, still drag repaints nothing" once
+  while other work ran beside the gate, then passed alone and in a quiet full run (20/20,
+  172 s); P07 T1 saw `viewport` do the same on a box just rebooted.
+- **Questions for the DualC owner** (rule 5), none raised yet: `06-dualc-questions.md`.
+- **The status bar's settled `frame` reads high on light scenes** (P00 T5,
+  `02-measurements.md` § Findings (P00 T5)): diagnostic only, the bench is the measurement.
 
 **Owner feedback after the plan (2026-10-14),** from a session in the live editor:
 - *The Parameters dock should follow the selection like the Transform dock, one object at
-  a time, instead of listing every object and scrolling.* Done the same day: with an
-  object selected the dock shows its section only, with none it shows all
-  (`../command_reference/01-viewport.md` § Parameters, `objects_panel` ctest).
+  a time, instead of listing every object and scrolling.* Done the same day (commit
+  95e1a8d): with an object selected the dock shows its section only, with none it shows
+  all (`../command_reference/01-viewport.md` § Parameters, `objects_panel` ctest).
 - *A faceted, torn mesh sphere* in the demo scene was the demo file (a bad text edit of a
   generated OBJ), not the import. Found on the way: an imported mesh file is not watched,
   by design (`../design/07-mesh-import.md`), so a mesh edited on disk needs a re-drop;
   graphs reload on save. Open, if wanted: watch mesh files too.
 - *A section tool is missing: X/Y/Z toggles and −/+ buttons to move the cut.* Done the same
-  day as a toolbar and `View ▸ Section`, on the trace shader's existing `uClip` planes
-  (`../command_reference/01-viewport.md` § Section; `viewport` and `parameter_dock`
-  ctests). Viewing only, not saved.
-
-Done: P06, export (`../../plan/70_P06_export.md`, `../../HANDOFF_P06_TASK1.md`).
-`File ▸ Export Selected Object…` (`Ctrl+E`) and `Export Visible Scene…` (`Ctrl+Shift+E`)
-open a dialog: the file, whose extension picks STL, 3MF or OBJ; the depth, with an
-estimate of the triangles and the RAM; the bounds; and DualC's tiled STL and 3MF, which
-closes E-27. DualC writes on a worker thread, with progress and a Cancel that leaves no
-file (`../design/08-export.md`). A gyroid fill at depth 6 writes a watertight file, and the
-estimate is 0.89× the real count there.
-
-Done: P05, operations (`../../plan/60_P05_operations.md`). T1
-(`../../HANDOFF_P05_TASK1.md`): `Operations ▸ Union … Smooth Difference` on the objects
-Ctrl+clicked in the Objects dock, in that order, folded left over more than two, with a
-`Blend k` in mm; non-metric operands of a smooth boolean go under `normalize` (E-10). T2
-(`../../HANDOFF_P05_TASK2.md`): `Operations ▸ Fill with TPMS…` and
-`Fill with Lattice…` fill the selected object, with an optional skin; its GTX check (the
-octet fill against the tapered octet, E-28's trigger) is queued. T3
-(`../../HANDOFF_P05_TASK3.md`): the menu entries and fill panels are generated from DualC's
-registries (`operationCatalogue`, `OperationPanel`), and the command reference lists the
-operations.
-
-Done: P04, import (`../../plan/50_P04_import.md`). E-09 is decided (OBJ, PLY and STL;
-3MF deferred). T1, the mesh readers (`../design/07-mesh-import.md`,
-`../../HANDOFF_P04_TASK1.md`); T2, import as a solid (`../../HANDOFF_P04_TASK2.md`): a
-dropped mesh becomes a `mesh` object when DualC finds it watertight and it is oriented,
-else a `winding` object; `Edit ▸ Make Watertight` contours a winding object on a worker
-thread, with progress and Cancel; `.dcscene` carries imported meshes. Its GTX check (E-22's
-trigger, `--meshes`) is queued.
-
-Done: P03, scene model (`../../plan/40_P03_scene_model.md`). T1, operation history and
-undo (`../design/04-scene-model.md`, `../../HANDOFF_P03_TASK1.md`); T2, `.dcscene`
-(`../design/05-dcscene-format.md`, `../../HANDOFF_P03_TASK2.md`); T3, the transform gizmo
-(`../design/06-transform-gizmo.md`, `../../HANDOFF_P03_TASK3.md`). Its GTX checks are
-queued.
-
-**Open from P07 (`../../HANDOFF_P07_TASK3.md`):** cold shader compiles are longer than
-P01.4's, and the reason is not known:
-- 10 primitives take 1137 ms against 670, although primitives keep P01's shader;
-- 3 TPMS-in-box take 1897 ms against 1210;
-- the window's compile thread takes 2567 ms for the same scene.
-
-The window stays responsive through them.
-
-**Known failure, its own item (owner, 2026-10-13):** on the GTX 1050 Ti, `main_window`
-fails one check, "the .fld renders a different image" (`tests/main_window_test.cpp:220`),
-at 8b9baf8 and at P07.1, so before P07. It passes on the development box. To be
-investigated with the GTX in the loop. Until then the GTX ctest is one short (12/13 at 4b89008). It does not
-block P07, and is still open after it. **A lead (2026-10-14):** the same check fails on
-the development box under llvmpipe (`LIBGL_ALWAYS_SOFTWARE=1 ctest -R main_window`), with
-other paint-timing checks, on a loaded box. Seen once at 0c08ec9 plus the Parameters-dock
-change, not at an earlier commit; if it repeats on a quiet box, the failure can be chased
-here without the GTX.
-
-Done: P07, render scaling (`../../plan/35_P07_render_scaling.md`), added by P02 and run
-before P03.
-- T1: costly objects (TPMS, lattices, meshes, …) skip their SDF while `p` is farther from
-  their world box than the nearest object. Cheap analytic objects are written as in P01
-  (`../design/03-scene-lowering.md` § Culling).
-- T2: a structural edit lowers, compiles and links on a compile thread, and the viewport
-  draws the old image until the new program links (`../design/01-render-path.md`
-  § Asynchronous compile).
-- T3: the owner re-measured on the GTX at b163141 with a cold shader cache
-  (`02-measurements.md` § GTX 1050 Ti at b163141). Per added object, settled GPU at 1.0:
-  - TPMS-in-box +1.96 ms, against +2.49 without culling;
-  - primitives +0.29 ms, against +0.28;
-  - a column in depth +0.13 ms.
-- The window kept orbiting through a cold 2.6 s compile.
-- E-21 and E-23 are closed. P07 is closed.
-
-Done: P02, go or no-go (`../../plan/30_P02_go_no_go.md`). `03-go-no-go.md` says **go**,
-approved by the owner on 2026-10-13. Every analytic and one-mesh scene measured orbits at
-0.35–0.5 well inside 16.7 ms and settles in under 10 ms; the tapered octet misses
-(81–128 ms moving against a 33 ms bar), as the feasibility note expected, and
-`dualc_field_view` is no faster on it. E-23 and E-21 are triggered and planned in P07; E-22
-is not measured (P04 T2 now measures it); E-28 (interruptible settle) is new, behind P05
-T2's octet check.
-
-Done: P01, scene and picking, Spike B (`../../plan/20_P01_scene_and_picking.md`). E-07
-is decided (CPU pick). T1 is done: a `Scene` of objects lowers to one shader, each object
-in its own colour, and visibility and colour are uniforms (`../design/03-scene-lowering.md`).
-`--snapshot` and `--bench` take several graphs. T2 is done: the window holds a scene, a
-drop adds an object, and the Objects dock shows, hides, selects and deletes objects. T3 is
-done: a click in the viewport selects the nearest object along the ray (a CPU pick), and the
-selection is highlighted in the viewport and the dock. The owner checked it on the laptop.
-T4 is done: the owner measured scenes of 1 to 10 objects on the GTX 1050 Ti with
-`scripts/measure_viewport.py --objects` (`02-measurements.md` § Against object count). Each
-added primitive costs about +0.29 ms and each added TPMS-in-box about +2.5 ms of settled
-GPU time at 1280×800. The worst scene, 3 TPMS-in-box, stays under 9.4 ms. E-23 is
-triggered. P01 is closed.
-
-Done: P00, the viewport, Spike A (`../../plan/10_P00_viewport.md`). T1 is done: the viewport
-sphere-traces `gyroid_box.json` through DualC's codegen, and `--snapshot` matches
-`dualc_field_view`. T2 is done: the orbit camera (orbit, dolly, pan, `F` to frame) and
-the adaptive preview, which settles after 180 ms and does not repaint while idle. T3 is
-done: a graph opens by `File ▸ Open`, by argument or by a drop. It reloads when saved, and
-a broken file shows its error and keeps the last image. T4 is done: a Parameters dock edits
-the graph's bindings as uniforms only, with no relink, and the status bar shows the
-shader compile ms and the GPU ms of the last settled frame. T5 is done: the owner measured
-on the GTX 1050 Ti with `--bench` and `scripts/measure_viewport.py` (`02-measurements.md`). The image matches dualc_field_view, and
-the moving frame time is within about 10% on the like-for-like rows. P00 is closed.
+  day (commit 1b59389) as a toolbar and `View ▸ Section`, on the trace shader's existing
+  `uClip` planes (`../command_reference/01-viewport.md` § Section; `viewport` and
+  `parameter_dock` ctests). Viewing only, not saved.
 
 ## Next up
 
-P03, once E-08 is decided (`../decisions/02-open.md`).
+Nothing is planned. When the owner adds a phase, its record goes in `05-plan-record/` as a
+new numbered file, the decisions it waits on in `../decisions/02-open.md`, and this section
+names it. Candidates the record left, not scheduled and in no order: watch the mesh files
+a graph names; an "unsaved changes" prompt and a dirty mark (`QUndoStack::cleanChanged`
+is the hook); `featureScale` following a scale (P03 T3); a colour picker in the Objects
+dock; a two-pass culling scheme (P07 T1's option B) if a later scene needs more; a
+`--export` flag over `exportGraph` + `buildExportField` + `runExport` (P06).
+
+## Phases
+
+In run order. Each record file holds the tasks as planned, what was delivered and
+verified, what went wrong, what stayed open and the owner checks.
+
+| Phase | What the user got | Record | Status |
+|---|---|---|---|
+| P00 Spike A: the viewport | DualC's tracer in a `QOpenGLWidget`, orbit camera, adaptive preview, open and watch a graph, Parameters dock, status-bar timing, `--snapshot`, `--bench` | `05-plan-record/01-p00-viewport.md` | DONE 2026-10-12 |
+| P01 Spike B: scene and picking | Several objects in one shader, the Objects dock, click to select with highlight, the object-count measurement | `05-plan-record/02-p01-scene-and-picking.md` | DONE 2026-10-12; E-23 triggered |
+| P02 Go or no-go | The verdict on the spikes: go (`03-go-no-go.md`); P07 added, E-28 recorded | `05-plan-record/03-p02-go-no-go.md` | DONE 2026-10-13 |
+| P07 Render scaling | Per-object culling of costly objects (E-23), asynchronous compile (E-21), the cold-cache re-measurement | `05-plan-record/04-p07-render-scaling.md` | DONE 2026-10-13; cold compile open |
+| P03 Scene model | Undo and redo (E-25), `.dcscene` (E-08), the transform gizmo and dock with a uniform scale | `05-plan-record/05-p03-scene-model.md` | DONE 2026-10-13; GTX checks queued |
+| P04 Mesh import | OBJ, PLY, STL readers (E-09), import as `mesh` or `winding`, Make Watertight | `05-plan-record/06-p04-import.md` | DONE 2026-10-13; GTX check queued (E-22) |
+| P05 Operations | Booleans with the E-10 wrap, TPMS and lattice fills with a skin, panels from DualC's registries | `05-plan-record/07-p05-operations.md` | DONE 2026-10-13; GTX checks queued (E-28) |
+| P06 Export | Export dialog with estimate and bounds, tiled STL and 3MF (E-27), export job with cancel | `05-plan-record/08-p06-export.md` | DONE 2026-10-13; GTX check queued |
 
 ## Files
 
 - `01-feasibility.md` — the 2026-10-09 analysis: what DualC already provides, the blockers, the expected performance.
-- `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00 and P01.
+- `02-measurements.md` — frame and compile times measured on the reference GPU (E-04), filled by P00, P01 and P07; the owed P04 T2 table; the owner's checklists.
 - `02-measurements-p00.jsonl` — the raw `--bench` output of the owner's two P00.5 runs on the GTX 1050 Ti (2026-10-10).
 - `02-measurements-p01.jsonl` — the raw `--bench` output of the owner's P01.4 run on the GTX 1050 Ti (2026-10-12).
 - `02-measurements-p07.jsonl` — the raw `--bench` output of the owner's GTX 1050 Ti runs of P07.1 (2026-10-13): the first 20 lines at dd92129 (culling all objects), the next 20 at 6f3a8bd (culling costly objects only, option C); and of P07.3: the last 20 at b163141, cold shader cache.
 - `03-go-no-go.md` — P02's verdict from the measurements: what met the feasibility target, what missed, the deferred items triggered, and the plan edits proposed for P03–P06.
-- `04-gtx-batch-2026-10-13.md` — the one laptop session that clears the GTX checks queued by P03–P06 (and two older items): what to run at the newest commit, what is expected, where the answers are filed.
+- `04-gtx-batch-2026-10-13.md` — the one laptop session that clears the GTX checks queued by P03–P06 (and two older items), plus the window checks on any machine: what to run at the newest commit, what is expected, where the answers are filed.
+- `05-plan-record/` — the phased plan P00–P07 as it ran, one file per phase: tasks, acceptance, what was delivered and verified, what went wrong, what stayed open. Digested from the runner's plan and handoff files on 2026-10-14.
+- `06-dualc-questions.md` — the DualC changes the editor would like (rule 5), each with its editor-side workaround; none raised yet.
+- `07-semantic-lint/` — the runs of the docs semantic lint (design pages against the code), one dated file per run.

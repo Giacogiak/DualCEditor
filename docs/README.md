@@ -8,9 +8,8 @@ Every folder has a `README.md` naming every file in it; `scripts/check.py` enfor
 |---|---|
 | `design/` | How the editor is built today: scene model, render path, threading, file formats. Written as the code lands. |
 | `decisions/` | Settled choices (not re-litigated), open decisions with the phases they block, deferred work with its trigger. |
-| `roadmap/` | Status snapshot, the feasibility analysis, measurements. |
+| `roadmap/` | Status snapshot, the feasibility analysis, measurements, the go/no-go, the record of the phased plan that built the editor (`roadmap/05-plan-record/`, one file per phase), the questions owed to DualC. |
 | `command_reference/` | The usage contract: launch flags, keys and mouse, panels. Updated in the same session as the UI. |
-| `../plan/` | The phased work plan `/plan-run` executes, one unit per task. |
 
 ## Files
 

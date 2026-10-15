@@ -6,12 +6,14 @@ reused or renumbered.
 ## Files
 
 - `01-settled.md` — choices that are not re-litigated (E-01 – E-06).
-- `02-open.md` — decisions a phase waits on, with options and a recommendation. `/plan-run` reads it at each stop.
+- `02-open.md` — decisions a phase waits on, with options and a recommendation. A plan runner reads it at each stop.
 - `03-deferred.md` — work parked behind a trigger (E-20 onward).
 
 ## Open decisions → blocked phases
 
-This table is authoritative; `/plan-run` reads it before unlocking a phase.
+This table is authoritative; a plan runner reads it before unlocking a phase. All four are
+decided and their phases have run (`../roadmap/05-plan-record/`); a new phase that waits
+on a decision adds a row here.
 
 | Decision | Blocks | Status |
 |---|---|---|

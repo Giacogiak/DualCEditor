@@ -34,8 +34,8 @@ git config core.hooksPath scripts/hooks   # once per clone: fast tier on commit
 
 1. **Nothing stays in the chat.** Every fix, measurement, decision or rejected approach is
    written to its owner (the table in `docs/README.md`) before the session ends.
-2. **Every folder under `docs/` and `plan/` has a README naming every file in it.** The
-   gate enforces this.
+2. **Every folder under `docs/` has a README naming every file in it.** The gate enforces
+   this (and under `plan/` too, whenever a plan runner's folder exists).
 3. **Ids are permanent.** Decisions are `E-NN`, phases `Pnn`, tasks `Tn`. Nothing is
    renumbered or reused. A DualC decision is cited as `DualC D-NN`.
 4. **The command reference grows with the UI.** A flag, key or panel that changes updates
@@ -61,5 +61,6 @@ git config core.hooksPath scripts/hooks   # once per clone: fast tier on commit
 1. `docs/README.md` — what lives where.
 2. `docs/roadmap/README.md` — current focus.
 3. `docs/decisions/README.md` — settled, open (with the phases they block) and deferred.
-4. `plan/README.md` and the phase file of the task at hand.
+4. `docs/roadmap/05-plan-record/` — how the code at hand came to be, phase by phase,
+   with what stayed open.
 5. `docs/design/` and `docs/command_reference/` pages the task touches.

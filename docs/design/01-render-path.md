@@ -184,7 +184,7 @@ hidden off-screen surface.
   the pinned commit. On nouveau, 198 of 480 000 pixels differ, by at most 2 levels. On
   llvmpipe, 246 pixels differ, all silhouette pixels where hit and miss flip. For scale,
   DualC's own hardware and llvmpipe images differ on 31 878 pixels. Conditions are in
-  `HANDOFF_P00_TASK1.md`.
+  `../roadmap/05-plan-record/01-p00-viewport.md` § T1.
 - On this development box (Quadro FX 3700, nouveau NV92, Mesa 26.0.8): hardware and
   `LIBGL_ALWAYS_SOFTWARE=1` (llvmpipe, LLVM 21.1.8) both render. With `DISPLAY` unset,
   the snapshot exits 77 and the ctest reports skipped.
@@ -194,8 +194,8 @@ hidden off-screen surface.
 - `viewport_test` passes on nouveau and on llvmpipe, with the preview at 0.25 and at 1.0.
   It checks the preview size of each drag frame, one full frame no sooner than 180 ms
   after release, and no `paintGL` in 1 s of idle. The frame times are in
-  `HANDOFF_P00_TASK2.md`. They come from a development box, so they are not performance
-  figures (E-04).
+  `../roadmap/05-plan-record/01-p00-viewport.md` § T2. They come from a development box,
+  so they are not performance figures (E-04).
 
 ## Verified (2026-10-10, P00 T4)
 
@@ -205,4 +205,4 @@ hidden off-screen surface.
 - On both drivers, the GPU timer query mostly agrees with the `glFinish` wall time of the
   paint log, within about 3 ms. Once on llvmpipe, a preview frame read 30.7 ms against a
   51.8 ms wall time. The wall time also counts waits outside the frame. Numbers and
-  conditions are in `HANDOFF_P00_TASK4.md`.
+  conditions are in `../roadmap/05-plan-record/01-p00-viewport.md` § T4.

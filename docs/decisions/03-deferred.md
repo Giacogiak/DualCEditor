@@ -18,7 +18,7 @@ before to 14–31 ms (`../roadmap/02-measurements.md`). Whether the stall is dis
 first clause) is the owner's call. `../roadmap/03-go-no-go.md` plans it: asynchronous
 compile first, an editor program cache only if measured to help.
 **Confirmed (Giacomo, 2026-10-13):** trigger now. Planned as P07 T2
-(`../../plan/35_P07_render_scaling.md`).
+(`../roadmap/05-plan-record/04-p07-render-scaling.md`).
 **Built (P07.2, 2026-10-13):** structural edits lower, compile and link on a compile
 thread with a context shared with the viewport's. The viewport draws the old program until
 the new one links, and the last edit wins (`../design/01-render-path.md` § Asynchronous
@@ -28,7 +28,8 @@ third TPMS-in-box during a held orbit. The view kept turning through a 2567 ms c
 (`../roadmap/02-measurements.md` § GTX 1050 Ti at b163141). The program cache stays
 unbuilt. Cold compiles are longer than P01.4's (10 primitives 1137 against 670 ms; 3
 TPMS-in-box 1897 against 1210 ms, and 2567 ms on the compile thread). That is not
-explained yet and is tracked as its own item (`../../HANDOFF_P07_TASK3.md`). A program
+explained yet and is tracked as its own item
+(`../roadmap/05-plan-record/04-p07-render-scaling.md` § T3, `../roadmap/README.md`). A program
 cache would only help a source seen before, which the driver's own cache already serves.
 
 ## E-22 — Freeze an object to a baked grid
@@ -45,7 +46,8 @@ P04 T2 (approved 2026-10-13, now in P04 T2's acceptance).
 **Triggered (P01.4, 2026-10-12):** about +0.29 ms per added primitive and +2.5 ms per added
 TPMS-in-box, settled GPU at 1280×800 on the GTX 1050 Ti (`../roadmap/02-measurements.md`).
 **Trigger:** frame time grows with the number of non-overlapping objects (P01's measurement).
-**Planned (P02.1, approved 2026-10-13):** P07 T1 (`../../plan/35_P07_render_scaling.md`).
+**Planned (P02.1, approved 2026-10-13):** P07 T1
+(`../roadmap/05-plan-record/04-p07-render-scaling.md`).
 **Built (P07.1, 2026-10-13):** each costly object's terms in `sceneSDF` and `sceneColor`
 (TPMS, lattice, mesh, … — not analytic primitives; owner's option C) are skipped while
 `p` is farther from its world box (`u_o<id>_boxMin`/`boxMax`, uniforms) than

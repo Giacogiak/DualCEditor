@@ -280,7 +280,7 @@ differ in each.
 Compile times in this run were 12–60 ms for every scene, TPMS included (25–28 ms for 3
 TPMS-in-box at 0.35). The driver's disk shader cache most likely served them. **So this run
 does not measure cold compile**, and the claim "primitive compile back near 670 ms cold" is
-not checked. The cold figure is P07 T3's (`plan/35_P07_render_scaling.md`), after the GL
+not checked. The cold figure is P07 T3's (§ GTX 1050 Ti at b163141 below), after the GL
 driver's shader cache is cleared.
 
 ### GTX 1050 Ti at b163141 (P07 T3, cold cache)
@@ -341,11 +341,11 @@ Findings (P07 T3):
     sits behind a branch, which can explain part of this.
   - The window's cold 3-TPMS compile, 2567 ms on the compile thread, is longer than the
     bench's 1897 ms on the GUI thread. A slower link on a second context would fit
-    (`HANDOFF_P07_TASK2.md`). Both figures time the same span:
+    (`05-plan-record/04-p07-render-scaling.md` § T2). Both figures time the same span:
     `TraceRenderer::linkProgram` starts its clock after the codegen and the shader
     assembly, and stops it at the link status. So the gap is not the codegen. There is one
     sample of each.
-  - This is open (`HANDOFF_P07_TASK3.md`), not a pass.
+  - This is open (`05-plan-record/04-p07-render-scaling.md` § T3), not a pass.
 
 ### How to measure (P07 T3 checklist)
 
