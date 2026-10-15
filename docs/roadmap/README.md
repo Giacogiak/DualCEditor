@@ -89,3 +89,4 @@ verified, what went wrong, what stayed open and the owner checks.
 - `04-gtx-batch-2026-10-13.md` — the one laptop session that clears the GTX checks queued by P03–P06 (and two older items), plus the window checks on any machine: what to run at the newest commit, what is expected, where the answers are filed.
 - `05-plan-record/` — the phased plan P00–P07 as it ran, one file per phase: tasks, acceptance, what was delivered and verified, what went wrong, what stayed open. Digested from the runner's plan and handoff files on 2026-10-14.
 - `06-dualc-questions.md` — the DualC changes the editor would like (rule 5), each with its editor-side workaround; none raised yet.
+- `07-semantic-lint/` — the runs of the docs semantic lint (design pages against the code), one dated file per run.
