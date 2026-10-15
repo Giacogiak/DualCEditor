@@ -1,10 +1,10 @@
 # DualCEditor
 
-A standalone 3D editor for [DualC](https://github.com/Giacogiak/DualC) field graphs. It is
-in early development: the skeleton builds against DualC, and the viewport is being built
-(see `docs/roadmap/README.md`).
+A standalone 3D editor for [DualC](https://github.com/Giacogiak/DualC) field graphs. The
+phased plan that built it (P00 to P07) ran in October 2026 and is recorded in
+`docs/roadmap/`; what is open is in `docs/roadmap/README.md`.
 
-What it will do:
+What it does:
 - render solids, TPMS and strut lattices live by sphere tracing, without meshing them;
 - import meshes by drag and drop, including mesh soups made watertight;
 - combine objects with hard and smooth booleans, and fill volumes with TPMS or strut

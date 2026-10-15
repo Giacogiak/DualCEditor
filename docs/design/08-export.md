@@ -1,6 +1,6 @@
 # Export
 
-How the scene becomes a mesh file (P06 T1, `../../plan/70_P06_export.md`). The editor
+How the scene becomes a mesh file (P06 T1, `../roadmap/05-plan-record/08-p06-export.md`). The editor
 chooses what to contour and where; DualC samples, contours and writes (E-05). Usage:
 `../command_reference/01-viewport.md` § Export.
 

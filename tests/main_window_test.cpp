@@ -369,7 +369,7 @@ int main(int argc, char* argv[]) {
       sameValues = bindingsBefore[i].name == vp.scene().bindings[i].name &&
                    bindingsBefore[i].value == vp.scene().bindings[i].value;
     // Not the image: across a relink, this box's NV92 driver draws the same
-    // shader and uniforms differently (HANDOFF_P03_TASK1.md).
+    // shader and uniforms differently (docs/roadmap/05-plan-record/05-p03-scene-model.md, T1).
     check(sameValues, "undo of a remove: the same uniforms and values");
   }
 

@@ -16,8 +16,8 @@ live impressions (P00 T5 checklist, step 6) are quoted where they exist.
 
 **Status: approved (Giacomo, 2026-10-13).** The owner approved the verdict, kept 33 ms as
 the interactive bar, confirmed E-21's trigger now, chose option 1a (a new phase P07), and
-approved items 2–5. All are applied: `../../plan/35_P07_render_scaling.md`, P03 T3, P04 T2
-and P05 T2's acceptance criteria, and E-28 in `../decisions/03-deferred.md`.
+approved items 2–5. All are applied: P07 (`05-plan-record/04-p07-render-scaling.md`),
+P03 T3, P04 T2 and P05 T2's acceptance criteria, and E-28 in `../decisions/03-deferred.md`.
 
 ## Verdict: go
 
@@ -123,9 +123,10 @@ Proposed by P02.1; all approved by the owner on 2026-10-13 and applied.
 
 1. **Schedule E-23 and E-21 before P05.** P05 is where object counts and structural edits
    multiply. Two ways:
-   - **(a, recommended, chosen)** a new phase, `plan/35_P07_render_scaling.md` (P07, the next free
-     phase id), that runs right after P02. Neither task depends on E-08, so it does not wait
-     on P03's open decision. Needs new units in `plan/run.manifest.json` (the owner's).
+   - **(a, recommended, chosen)** a new phase, P07 (the next free phase id; its record is
+     `05-plan-record/04-p07-render-scaling.md`), that runs right after P02. Neither task
+     depends on E-08, so it does not wait on P03's open decision. Needs new units in the
+     runner's manifest (the owner's).
    - **(b)** two new tasks in P03, T4 (E-23) and T5 (E-21), after the gizmo. No new phase,
      but they wait on E-08 with the rest of P03.
 

@@ -214,8 +214,10 @@ The trace box follows a move too (P03 T3): `MainWindow::pushUniforms` sets
 `sceneTraceBounds(scene on screen, lowered)`, the union of every object's box as posed now,
 through `Viewport::setTraceBounds`, which `TraceRenderer` uploads as `uBoundsMin` and
 `uBoundsMax` at the next frame. The march's step bounds derive from that box and follow it.
-`featureScale` does not: it stays as lowered until the next compile (§ Open in
-`../../HANDOFF_P03_TASK3.md`).
+`featureScale` does not: it stays as lowered until the next compile
+(`../roadmap/05-plan-record/05-p03-scene-model.md` § T3 *Open*; the editor-side fix would
+scale it by the smallest object scale in `pushUniforms`; the parameter case is Q5 in
+`../roadmap/06-dualc-questions.md`).
 
 ## Where it is used
 

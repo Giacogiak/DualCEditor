@@ -5,8 +5,9 @@
   python scripts/check.py --fast   # docs + hygiene only, about a second
   python scripts/check.py --build-dir DIR   # build tree (default: build)
 
-Docs contract: every folder under docs/ and plan/ has a README.md that names
-every file and folder directly inside it (principle 2 in CLAUDE.md).
+Docs contract: every folder under docs/ (and under plan/, whenever a plan
+runner's folder exists) has a README.md that names every file and folder
+directly inside it (principle 2 in CLAUDE.md).
 """
 
 import argparse
@@ -15,16 +16,18 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-INDEXED_TREES = ["docs", "plan"]
+INDEXED_TREES = ["docs"]      # must exist
+OPTIONAL_TREES = ["plan"]     # indexed when present
 JUNK = ["*.swp", "*.swo", "*.bak", "*.orig", ".DS_Store"]
 
 
 def check_indexes() -> list[str]:
     problems = []
-    for tree in INDEXED_TREES:
+    for tree in INDEXED_TREES + OPTIONAL_TREES:
         top = ROOT / tree
         if not top.is_dir():
-            problems.append(f"{tree}/ is missing")
+            if tree in INDEXED_TREES:
+                problems.append(f"{tree}/ is missing")
             continue
         for folder in [top, *[p for p in top.rglob("*") if p.is_dir()]]:
             readme = folder / "README.md"
